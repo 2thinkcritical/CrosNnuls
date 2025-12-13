@@ -1,3 +1,4 @@
+import io
 import math
 import os
 import random
@@ -5,7 +6,11 @@ import tkinter as tk
 from tkinter import font as tkfont
 
 import requests
+from PIL import Image
 
+import webbrowser
+
+from config import BOT_TOKEN, BOT_USERNAME, ADMIN_CHAT_ID
 
 WIN_LINES: tuple[tuple[int, int, int], ...] = (
     (0, 1, 2),
@@ -19,20 +24,76 @@ WIN_LINES: tuple[tuple[int, int, int], ...] = (
 )
 
 
-def send_telegram_message(text: str) -> None:
-    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
-    if not token or not chat_id:
+def send_telegram_message(text: str, chat_id: str | None = None) -> None:
+    """Отправляет сообщение в Telegram."""
+    token = BOT_TOKEN
+    target_chat = chat_id or ADMIN_CHAT_ID
+    
+    if not token or not target_chat:
+        print("[warn] Telegram token or chat_id not configured")
         return
 
     try:
         requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text},
+            json={"chat_id": target_chat, "text": text, "parse_mode": "HTML"},
             timeout=5,
         ).raise_for_status()
     except Exception as exc:
         print(f"[warn] Telegram send failed: {exc}")
+
+
+def get_deep_link(username: str) -> str:
+    """Генерирует deep link для подключения к боту."""
+    return f"https://t.me/{BOT_USERNAME}?start={username}"
+
+
+def check_user_subscribed(username: str) -> int | None:
+    """
+    Проверяет, подписался ли пользователь на бота.
+    Возвращает chat_id если подписался, иначе None.
+    """
+    token = BOT_TOKEN
+    if not token:
+        return None
+    
+    try:
+        # Получаем последние обновления
+        response = requests.get(
+            f"https://api.telegram.org/bot{token}/getUpdates",
+            params={"timeout": 1, "allowed_updates": ["message"]},
+            timeout=5,
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get("ok"):
+            return None
+        
+        # Ищем сообщение /start с нужным username в payload
+        for update in reversed(data.get("result", [])):
+            message = update.get("message", {})
+            text = message.get("text", "")
+            
+            # Проверяем /start с payload
+            if text.startswith("/start"):
+                parts = text.split()
+                if len(parts) > 1 and parts[1].lower() == username.lower():
+                    chat_id = message.get("chat", {}).get("id")
+                    if chat_id:
+                        # Подтверждаем получение обновления
+                        update_id = update.get("update_id")
+                        requests.get(
+                            f"https://api.telegram.org/bot{token}/getUpdates",
+                            params={"offset": update_id + 1},
+                            timeout=2,
+                        )
+                        return chat_id
+        
+        return None
+    except Exception as exc:
+        print(f"[warn] Check subscription failed: {exc}")
+        return None
 
 
 def check_winner(board: list[str]) -> str | None:
@@ -126,50 +187,56 @@ class TicTacToeApp:
         self.root.resizable(True, True)
 
         # ══════════════════════════════════════════════════════════════════
-        # ЭЛЕГАНТНАЯ ПАЛИТРА для 3D-куба
+        # КОСМИЧЕСКАЯ ПАЛИТРА — звёздное небо
         # ══════════════════════════════════════════════════════════════════
         
-        self.bg_main = "#F5F0EC"
+        self.bg_main = "#0B0E17"            # Глубокий космос
+        self.bg_gradient_top = "#0F1423"    # Верхняя часть градиента
+        self.bg_gradient_bottom = "#1A1E2E" # Нижняя часть градиента
         
-        # Грани куба
-        self.cube_top = "#FFFAF7"          # Верхняя грань (игровое поле)
-        self.cube_right = "#E8DED6"         # Правая грань (тень)
-        self.cube_left = "#F0E6DE"          # Левая грань (полутень)
+        # Грани куба — полупрозрачные стеклянные
+        self.cube_top = "#1E2438"          # Верхняя грань (игровое поле)
+        self.cube_right = "#151929"         # Правая грань (тень)
+        self.cube_left = "#1A1F32"          # Левая грань (полутень)
         
-        self.bg_cell = "#FBF7F4"
-        self.bg_cell_hover = "#F5EDE7"
-        self.grid_line = "#DDD0C6"
-        self.border_accent = "#D4A89A"
+        self.bg_cell = "#232940"
+        self.bg_cell_hover = "#2E3650"
+        self.grid_line = "#3D4565"
+        self.border_accent = "#6B7AAA"
         
-        # Символы
-        self.x_color = "#C67B7B"
-        self.x_glow = "#E8B4B4"
-        self.o_color = "#9B7E9B"
-        self.o_glow = "#C9B3C9"
+        # Символы — неоновые космические
+        self.x_color = "#FF6B9D"            # Розовый неон
+        self.x_glow = "#FF8FB3"
+        self.o_color = "#00D4FF"            # Голубой неон
+        self.o_glow = "#66E5FF"
         
-        # Текст
-        self.text_primary = "#5D4E4E"
-        self.text_secondary = "#7A6B6B"
-        self.text_muted = "#9A8B8B"
-        self.text_light = "#B8A8A8"
+        # Текст — светлый на тёмном
+        self.text_primary = "#E8ECF5"
+        self.text_secondary = "#B8C0D8"
+        self.text_muted = "#7A85A8"
+        self.text_light = "#5A6488"
         
         # Статусы
-        self.win_color = "#7BAF9B"
-        self.win_glow = "#A8D4C0"
-        self.win_bg = "#EDF7F3"
-        self.loss_color = "#C9A8A8"
-        self.loss_bg = "#FAF3F3"
-        self.draw_color = "#C4A574"
-        self.draw_bg = "#FAF6EF"
+        self.win_color = "#00E5A0"          # Зелёный неон
+        self.win_glow = "#66F5C8"
+        self.win_bg = "#0D1A18"
+        self.loss_color = "#FF6B6B"
+        self.loss_bg = "#1A0F0F"
+        self.draw_color = "#FFD166"
+        self.draw_bg = "#1A1708"
         
         # Кнопки
-        self.accent = "#C9907E"
-        self.accent_hover = "#B87D6B"
-        self.accent_light = "#E8C4B8"
-        self.btn_secondary = "#EDE5DF"
-        self.btn_secondary_hover = "#E3D8D0"
-        self.btn_text = "#6B5B5B"
-        self.border_light = "#E8DCD4"
+        self.accent = "#7B68EE"             # Фиолетовый
+        self.accent_hover = "#9580FF"
+        self.accent_light = "#A899FF"
+        self.btn_secondary = "#2A3150"
+        self.btn_secondary_hover = "#363E5E"
+        self.btn_text = "#E0E4F0"
+        self.border_light = "#3A4268"
+        
+        # Фоновое изображение
+        self._bg_original: Image.Image | None = None
+        self._bg_photo: tk.PhotoImage | None = None
 
         self.root.configure(bg=self.bg_main)
 
@@ -185,195 +252,779 @@ class TicTacToeApp:
         self._is_flipping = False
         self._flip_direction = 1  # 1 = вперёд, -1 = назад
         self._game_number = 0
+        
+        # Параметры тряски при победе
+        self._shake_offset_x = 0.0
+        self._shake_offset_y = 0.0
+        self._is_shaking = False
+        
+        # Ник пользователя в телеграмме
+        self._telegram_username: str = ""
+        self._telegram_chat_id: int | None = None  # Chat ID для отправки сообщений
+        self._username_entered = False
+        self._game_blocked = True  # Блокируем игру пока не введён ник
+        self._dialog_visible = False  # Флаг видимости диалога
+        self._checking_subscription = False  # Флаг проверки подписки
 
         self._build_ui()
+        self._load_background()
+        self.root.after(50, self._draw_background)
         self.reset(animate=False)
+        
+        # Показываем окно ввода ника после инициализации UI
+        self.root.after(100, self._show_username_dialog)
 
     def _build_ui(self) -> None:
-        # Основной контейнер
-        self.container = tk.Frame(self.root, bg=self.bg_main)
-        self.container.pack(fill="both", expand=True)
-
         # ══════════════════════════════════════════════════════════════════
-        # Заголовок
+        # Фоновый canvas на всё окно (звёздное небо + куб)
         # ══════════════════════════════════════════════════════════════════
-        self.header_frame = tk.Frame(self.container, bg=self.bg_main)
-        self.header_frame.pack(fill="x", pady=(20, 10))
-
-        try:
-            title_font = tkfont.Font(family="Palatino", size=26, weight="normal")
-        except Exception:
-            try:
-                title_font = tkfont.Font(family="Georgia", size=26, weight="normal")
-            except Exception:
-                title_font = tkfont.Font(family="Times New Roman", size=26, weight="normal")
-
-        self.title_lbl = tk.Label(
-            self.header_frame,
-            text="Крестики-нолики",
-            bg=self.bg_main,
-            fg=self.text_primary,
-            font=title_font,
-        )
-        self.title_lbl.pack()
-
-        try:
-            subtitle_font = tkfont.Font(family="Palatino", size=11, slant="italic")
-        except Exception:
-            try:
-                subtitle_font = tkfont.Font(family="Georgia", size=11, slant="italic")
-            except Exception:
-                subtitle_font = tkfont.Font(family="Times New Roman", size=11, slant="italic")
-
-        self.subtitle_lbl = tk.Label(
-            self.header_frame,
-            text="Выиграй и получи промокод",
-            bg=self.bg_main,
-            fg=self.text_muted,
-            font=subtitle_font,
-        )
-        self.subtitle_lbl.pack(pady=(4, 0))
-
-        # ══════════════════════════════════════════════════════════════════
-        # 3D Canvas для куба
-        # ══════════════════════════════════════════════════════════════════
-        canvas_width = 460
-        canvas_height = 380
-        
-        self.cube_canvas = tk.Canvas(
-            self.container,
-            width=canvas_width,
-            height=canvas_height,
+        self.bg_canvas = tk.Canvas(
+            self.root,
             bg=self.bg_main,
             highlightthickness=0,
         )
-        self.cube_canvas.pack(pady=(10, 10))
-
-        self.cube_canvas.bind("<Motion>", self._on_mouse_move)
-        self.cube_canvas.bind("<Leave>", self._on_mouse_leave)
-        self.cube_canvas.bind("<Button-1>", self._on_click)
-
-        # ══════════════════════════════════════════════════════════════════
-        # Статус-панель
-        # ══════════════════════════════════════════════════════════════════
-        self.status_outer = tk.Frame(self.container, bg=self.bg_main)
-        self.status_outer.pack(fill="x", pady=(0, 10))
+        self.bg_canvas.pack(fill="both", expand=True)
         
-        self.status_frame = tk.Frame(
-            self.status_outer,
-            bg="#FFFFFF",
-            highlightthickness=1,
-            highlightbackground=self.border_light,
-        )
-        self.status_frame.pack(fill="x", padx=30)
-
-        self.status_inner = tk.Frame(self.status_frame, bg="#FFFFFF")
-        self.status_inner.pack(pady=14)
-
-        self.status_indicator = tk.Canvas(
-            self.status_inner, width=12, height=12,
-            bg="#FFFFFF", highlightthickness=0,
-        )
-        self.status_indicator.pack(side="left", padx=(0, 10))
-        self._status_dot = self.status_indicator.create_oval(1, 1, 11, 11, fill=self.x_color, outline="")
-
-        try:
-            status_font = tkfont.Font(family="Palatino", size=14, weight="bold")
-        except Exception:
-            try:
-                status_font = tkfont.Font(family="Georgia", size=14, weight="bold")
-            except Exception:
-                status_font = tkfont.Font(family="Times New Roman", size=14, weight="bold")
-
-        self.status_lbl = tk.Label(
-            self.status_inner, text="Твой ход",
-            bg="#FFFFFF", fg=self.text_primary, font=status_font,
-        )
-        self.status_lbl.pack(side="left")
-
-        self.separator = tk.Frame(self.status_frame, bg=self.border_light, height=1)
-        self.separator.pack(fill="x", padx=20, pady=(0, 10))
-
-        try:
-            detail_font = tkfont.Font(family="Palatino", size=10)
-        except Exception:
-            try:
-                detail_font = tkfont.Font(family="Georgia", size=10)
-            except Exception:
-                detail_font = tkfont.Font(family="Times New Roman", size=10)
-
-        self.detail_lbl = tk.Label(
-            self.status_frame,
-            text="Ты играешь за × · Компьютер за ○",
-            bg="#FFFFFF", fg=self.text_muted, font=detail_font,
-            wraplength=350, justify="center",
-        )
-        self.detail_lbl.pack(pady=(0, 14))
-
-        # Кнопки действий
-        self.actions = tk.Frame(self.status_frame, bg="#FFFFFF")
-
-        try:
-            btn_font = tkfont.Font(family="Palatino", size=10, weight="bold")
-        except Exception:
-            try:
-                btn_font = tkfont.Font(family="Georgia", size=10, weight="bold")
-            except Exception:
-                btn_font = tkfont.Font(family="Times New Roman", size=10, weight="bold")
-
-        self.copy_btn = tk.Button(
-            self.actions, text="Скопировать промокод", font=btn_font,
-            fg="#FFFFFF", bg=self.accent, activeforeground="#FFFFFF",
-            activebackground=self.accent_hover, bd=0, relief="flat",
-            cursor="hand2", command=self.copy_promo,
-        )
-        self.copy_btn.bind("<Enter>", lambda e: self.copy_btn.configure(bg=self.accent_hover))
-        self.copy_btn.bind("<Leave>", lambda e: self.copy_btn.configure(bg=self.accent))
-
-        self.retry_btn = tk.Button(
-            self.actions, text="Сыграть ещё раз", font=btn_font,
-            fg="#FFFFFF", bg=self.accent, activeforeground="#FFFFFF",
-            activebackground=self.accent_hover, bd=0, relief="flat",
-            cursor="hand2", command=self.reset,
-        )
-        self.retry_btn.bind("<Enter>", lambda e: self.retry_btn.configure(bg=self.accent_hover))
-        self.retry_btn.bind("<Leave>", lambda e: self.retry_btn.configure(bg=self.accent))
+        # Привязка событий для куба на bg_canvas
+        self.bg_canvas.bind("<Motion>", self._on_mouse_move)
+        self.bg_canvas.bind("<Leave>", self._on_mouse_leave)
+        self.bg_canvas.bind("<Button-1>", self._on_click)
+        self.bg_canvas.bind("<Configure>", self._on_resize)
 
         # ══════════════════════════════════════════════════════════════════
-        # Кнопка "Новая игра"
+        # Заголовок (рисуем прямо на canvas для прозрачного фона)
         # ══════════════════════════════════════════════════════════════════
         try:
-            restart_font = tkfont.Font(family="Palatino", size=10)
+            self.title_font = tkfont.Font(family="Palatino", size=26, weight="normal")
         except Exception:
             try:
-                restart_font = tkfont.Font(family="Georgia", size=10)
+                self.title_font = tkfont.Font(family="Georgia", size=26, weight="normal")
             except Exception:
-                restart_font = tkfont.Font(family="Times New Roman", size=10)
+                self.title_font = tkfont.Font(family="Times New Roman", size=26, weight="normal")
 
-        self.restart_btn = tk.Button(
-            self.container, text="Начать заново", font=restart_font,
-            fg=self.btn_text, bg=self.btn_secondary,
-            activeforeground=self.btn_text, activebackground=self.btn_secondary_hover,
-            bd=0, relief="flat", cursor="hand2", command=self.reset,
-        )
-        self.restart_btn.pack(pady=(5, 15), ipadx=20, ipady=8)
-        self.restart_btn.bind("<Enter>", lambda e: self.restart_btn.configure(bg=self.btn_secondary_hover))
-        self.restart_btn.bind("<Leave>", lambda e: self.restart_btn.configure(bg=self.btn_secondary))
-
-        # Футер
         try:
-            footer_font = tkfont.Font(family="Palatino", size=9, slant="italic")
+            self.subtitle_font = tkfont.Font(family="Palatino", size=26, slant="italic")
         except Exception:
             try:
-                footer_font = tkfont.Font(family="Georgia", size=9, slant="italic")
+                self.subtitle_font = tkfont.Font(family="Georgia", size=26, slant="italic")
             except Exception:
-                footer_font = tkfont.Font(family="Times New Roman", size=9, slant="italic")
+                self.subtitle_font = tkfont.Font(family="Times New Roman", size=26, slant="italic")
 
-        self.footer = tk.Label(
-            self.container, text="Удачи в игре",
-            bg=self.bg_main, fg=self.text_light, font=footer_font,
+        # ══════════════════════════════════════════════════════════════════
+        # Куб рисуется на bg_canvas (позиция настраивается в _draw_cube)
+        # ══════════════════════════════════════════════════════════════════
+        self._cube_center_x = 260
+        self._cube_center_y = 310
+
+        # ══════════════════════════════════════════════════════════════════
+        # Кнопка "Начать заново" — рисуем на canvas для корректного цвета
+        # ══════════════════════════════════════════════════════════════════
+        self.moon_pink = "#D080C0"  # Розово-фиолетовый как луна на фоне
+        self.moon_pink_hover = "#E098D0"
+        
+        try:
+            self.btn_font = tkfont.Font(family="Palatino", size=16, weight="bold")
+        except Exception:
+            try:
+                self.btn_font = tkfont.Font(family="Georgia", size=16, weight="bold")
+            except Exception:
+                self.btn_font = tkfont.Font(family="Times New Roman", size=16, weight="bold")
+
+        # Параметры кнопки
+        self._btn_text = "Начать заново"
+        self._btn_color = self.moon_pink
+        self._btn_command = self.reset
+        self._btn_x = 260
+        self._btn_y = 560
+        self._btn_hovered = False
+
+    # ══════════════════════════════════════════════════════════════════════
+    # ФОНОВОЕ ИЗОБРАЖЕНИЕ
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _load_background(self) -> None:
+        """Загружает фоновое изображение."""
+        try:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            bg_path = os.path.join(script_dir, "background.png")
+            if not os.path.exists(bg_path):
+                bg_path = os.path.join(script_dir, "background.jpg")
+            
+            if os.path.exists(bg_path):
+                self._bg_original = Image.open(bg_path)
+            else:
+                print(f"[warn] Background image not found at {bg_path}")
+                self._bg_original = None
+        except Exception as e:
+            print(f"[warn] Could not load background: {e}")
+            self._bg_original = None
+
+    def _draw_background(self) -> None:
+        """Отрисовывает фоновое изображение на canvas."""
+        self._draw_background_only()
+        
+        # Рисуем заголовки на фоне
+        self._draw_titles()
+        
+        # Поднимаем UI-элементы над фоном
+        self.bg_canvas.tag_raise("cube")
+        self.bg_canvas.tag_raise("titles")
+        self.bg_canvas.tag_raise("button")
+
+    def _draw_background_only(self) -> None:
+        """Отрисовывает только фоновое изображение (без заголовков и UI)."""
+        self.bg_canvas.delete("background")
+        
+        if self._bg_original is None:
+            return
+        
+        # Получаем размеры canvas
+        width = self.bg_canvas.winfo_width()
+        height = self.bg_canvas.winfo_height()
+        
+        if width <= 1 or height <= 1:
+            width = 520
+            height = 820
+        
+        # Масштабируем изображение чтобы покрыть весь canvas (cover)
+        img_ratio = self._bg_original.width / self._bg_original.height
+        canvas_ratio = width / height
+        
+        if canvas_ratio > img_ratio:
+            new_width = width
+            new_height = int(width / img_ratio)
+        else:
+            new_height = height
+            new_width = int(height * img_ratio)
+        
+        resized = self._bg_original.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Центрируем и обрезаем
+        left = (new_width - width) // 2
+        top = (new_height - height) // 2
+        cropped = resized.crop((left, top, left + width, top + height))
+        
+        # Конвертируем в PNG через BytesIO для совместимости с tk.PhotoImage
+        buffer = io.BytesIO()
+        cropped.save(buffer, format="PNG")
+        buffer.seek(0)
+        
+        self._bg_photo = tk.PhotoImage(data=buffer.getvalue())
+        self.bg_canvas.create_image(0, 0, image=self._bg_photo, anchor="nw", tags="background")
+        self.bg_canvas.tag_lower("background")
+
+    def _draw_titles(self) -> None:
+        """Рисует заголовки прямо на canvas (прозрачный фон)."""
+        # Не рисуем заголовки, если открыт диалог регистрации
+        if self._dialog_visible:
+            return
+        
+        self.bg_canvas.delete("titles")
+        
+        cx = self._cube_center_x
+        
+        # Измеряем текст для размера фона
+        text1 = "Выиграй в крестики-нолики"
+        text2 = "и получи промокод"
+        text1_width = self.title_font.measure(text1)
+        text2_width = self.title_font.measure(text2)
+        text_height = self.title_font.metrics("linespace")
+        
+        max_width = max(text1_width, text2_width)
+        pad_x = 12
+        pad_y = 12
+        
+        # Фон под текст (такой же как кнопка)
+        bg_width = max_width + pad_x * 2
+        bg_height = text_height * 2 + pad_y * 2 + 15  # 15 — расстояние между строками
+        bg_y = 47  # Центр фона
+        
+        r = 8  # радиус скругления
+        x1, y1 = cx - bg_width // 2, bg_y - bg_height // 2
+        x2, y2 = cx + bg_width // 2, bg_y + bg_height // 2
+        
+        # Скруглённый прямоугольник
+        self.bg_canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=self.moon_pink, outline="", tags="titles")
+        self.bg_canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=self.moon_pink, outline="", tags="titles")
+        self.bg_canvas.create_oval(x1, y1, x1 + r*2, y1 + r*2, fill=self.moon_pink, outline="", tags="titles")
+        self.bg_canvas.create_oval(x2 - r*2, y1, x2, y1 + r*2, fill=self.moon_pink, outline="", tags="titles")
+        self.bg_canvas.create_oval(x1, y2 - r*2, x1 + r*2, y2, fill=self.moon_pink, outline="", tags="titles")
+        self.bg_canvas.create_oval(x2 - r*2, y2 - r*2, x2, y2, fill=self.moon_pink, outline="", tags="titles")
+        
+        # Первая строка
+        self.bg_canvas.create_text(
+            cx, 30,
+            text=text1,
+            fill="#1A1E2E",  # Тёмный текст как на кнопке
+            font=self.title_font,
+            anchor="center",
+            tags="titles"
         )
-        self.footer.pack(anchor="center", pady=(0, 10))
+        
+        # Вторая строка
+        self.bg_canvas.create_text(
+            cx, 65,
+            text=text2,
+            fill="#1A1E2E",  # Тёмный текст как на кнопке
+            font=self.title_font,
+            anchor="center",
+            tags="titles"
+        )
+        
+        # Кнопка
+        self._draw_button()
+
+    def _show_username_dialog(self) -> None:
+        """Показывает красивое модальное окно для ввода ника в телеграмме."""
+        self.bg_canvas.delete("username_dialog")
+        self.bg_canvas.delete("username_overlay")
+        
+        # Скрываем игровые элементы — показываем только фон
+        self.bg_canvas.delete("cube")
+        self.bg_canvas.delete("titles")
+        self.bg_canvas.delete("button")
+        
+        # Перерисовываем фон чтобы он точно был виден
+        self._draw_background_only()
+        
+        # Получаем размеры canvas
+        canvas_width = self.bg_canvas.winfo_width()
+        canvas_height = self.bg_canvas.winfo_height()
+        
+        if canvas_width <= 1:
+            canvas_width = 520
+        if canvas_height <= 1:
+            canvas_height = 820
+        
+        cx = canvas_width // 2
+        cy = canvas_height // 2
+        
+        # Размеры диалога
+        dialog_width = 420
+        dialog_height = 280
+        
+        x1 = cx - dialog_width // 2
+        y1 = cy - dialog_height // 2
+        x2 = cx + dialog_width // 2
+        y2 = cy + dialog_height // 2
+        
+        # Тень
+        shadow_offset = 8
+        r = 20
+        self._draw_rounded_rect(
+            x1 + shadow_offset, y1 + shadow_offset,
+            x2 + shadow_offset, y2 + shadow_offset,
+            r, "#000000", "username_dialog"
+        )
+        
+        # Основной фон диалога
+        self._draw_rounded_rect(x1, y1, x2, y2, r, "#1A1E2E", "username_dialog")
+        
+        # Неоновая рамка
+        self._draw_rounded_rect_outline(
+            x1 + 3, y1 + 3, x2 - 3, y2 - 3,
+            r - 2, self.moon_pink, 2, "username_dialog"
+        )
+        
+        # Шрифты
+        try:
+            header_font = tkfont.Font(family="Palatino", size=22, weight="bold")
+            text_font = tkfont.Font(family="Palatino", size=14)
+            btn_font = tkfont.Font(family="Palatino", size=16, weight="bold")
+        except Exception:
+            header_font = tkfont.Font(family="Arial", size=22, weight="bold")
+            text_font = tkfont.Font(family="Arial", size=14)
+            btn_font = tkfont.Font(family="Arial", size=16, weight="bold")
+        
+        # Заголовок
+        self.bg_canvas.create_text(
+            cx, y1 + 45,
+            text="Добро пожаловать!",
+            fill=self.moon_pink,
+            font=header_font,
+            anchor="center",
+            tags="username_dialog"
+        )
+        
+        # Описание
+        self.bg_canvas.create_text(
+            cx, y1 + 85,
+            text="Введите ваш ник в Telegram",
+            fill=self.text_secondary,
+            font=text_font,
+            anchor="center",
+            tags="username_dialog"
+        )
+        
+        # Поле ввода (Entry widget поверх canvas)
+        self._username_entry = tk.Entry(
+            self.bg_canvas,
+            font=("Palatino", 16),
+            bg="#232940",
+            fg=self.text_primary,
+            insertbackground=self.moon_pink,
+            relief="flat",
+            justify="center",
+            width=25,
+            highlightthickness=0,
+            bd=0,
+        )
+        self._username_entry.insert(0, "@")
+        
+        # Размещаем поле ввода
+        self.bg_canvas.create_window(
+            cx, y1 + 135,
+            window=self._username_entry,
+            tags="username_dialog"
+        )
+        
+        # Рамка для поля ввода (внешняя)
+        entry_width = 280
+        self._draw_rounded_rect_outline(
+            cx - entry_width // 2, y1 + 115,
+            cx + entry_width // 2, y1 + 155,
+            8, self.border_accent, 2, "username_dialog"
+        )
+        
+        # Кнопка "Подключиться к боту"
+        btn_y = y1 + 220
+        btn_width = 280
+        btn_height = 50
+        
+        self._draw_rounded_rect(
+            cx - btn_width // 2, btn_y - btn_height // 2,
+            cx + btn_width // 2, btn_y + btn_height // 2,
+            12, self.moon_pink, "username_dialog"
+        )
+        
+        self.bg_canvas.create_text(
+            cx, btn_y,
+            text="Начать игру",
+            fill="#1A1E2E",
+            font=btn_font,
+            anchor="center",
+            tags=("username_dialog", "connect_btn")
+        )
+        
+        # Привязываем обработчики
+        self.bg_canvas.tag_bind("connect_btn", "<Button-1>", self._on_connect_bot_click)
+        self._username_entry.bind("<Return>", lambda e: self._on_connect_bot_click(None))
+        self._username_entry.focus_set()
+        
+        # Устанавливаем флаг видимости
+        self._dialog_visible = True
+        
+        # Поднимаем диалог наверх
+        self.bg_canvas.tag_raise("username_dialog")
+
+    def _on_connect_bot_click(self, event) -> None:
+        """Открывает deep link и показывает второй шаг диалога."""
+        username = self._username_entry.get().strip()
+        
+        # Убираем @ если есть
+        if username.startswith("@"):
+            username = username[1:]
+        
+        if not username or len(username) < 2:
+            # Подсветим поле красным
+            self._username_entry.configure(bg="#3A2020")
+            self.root.after(500, lambda: self._username_entry.configure(bg="#232940"))
+            return
+        
+        self._telegram_username = username
+        
+        # Открываем deep link в браузере
+        deep_link = get_deep_link(username)
+        webbrowser.open(deep_link)
+        
+        # Показываем второй шаг диалога
+        self._show_step2_dialog()
+
+    def _show_step2_dialog(self) -> None:
+        """Показывает второй шаг — ожидание подписки на бота."""
+        self.bg_canvas.delete("username_dialog")
+        
+        # Удаляем поле ввода
+        if hasattr(self, '_username_entry') and self._username_entry.winfo_exists():
+            self._username_entry.destroy()
+        
+        # Получаем размеры canvas
+        canvas_width = self.bg_canvas.winfo_width()
+        canvas_height = self.bg_canvas.winfo_height()
+        
+        if canvas_width <= 1:
+            canvas_width = 520
+        if canvas_height <= 1:
+            canvas_height = 820
+        
+        cx = canvas_width // 2
+        cy = canvas_height // 2
+        
+        # Размеры диалога
+        dialog_width = 420
+        dialog_height = 220
+        
+        x1 = cx - dialog_width // 2
+        y1 = cy - dialog_height // 2
+        x2 = cx + dialog_width // 2
+        y2 = cy + dialog_height // 2
+        
+        # Тень
+        r = 20
+        self._draw_rounded_rect(
+            x1 + 8, y1 + 8, x2 + 8, y2 + 8,
+            r, "#000000", "username_dialog"
+        )
+        
+        # Основной фон
+        self._draw_rounded_rect(x1, y1, x2, y2, r, "#1A1E2E", "username_dialog")
+        
+        # Неоновая рамка
+        self._draw_rounded_rect_outline(
+            x1 + 3, y1 + 3, x2 - 3, y2 - 3,
+            r - 2, self.o_color, 2, "username_dialog"
+        )
+        
+        # Шрифты
+        try:
+            header_font = tkfont.Font(family="Palatino", size=20, weight="bold")
+            text_font = tkfont.Font(family="Palatino", size=14)
+        except Exception:
+            header_font = tkfont.Font(family="Arial", size=20, weight="bold")
+            text_font = tkfont.Font(family="Arial", size=14)
+        
+        # Заголовок с анимацией
+        self.bg_canvas.create_text(
+            cx, y1 + 55,
+            text="⏳ Ожидание подключения...",
+            fill=self.o_color,
+            font=header_font,
+            anchor="center",
+            tags="username_dialog"
+        )
+        
+        # Инструкция
+        self.bg_canvas.create_text(
+            cx, y1 + 105,
+            text="Нажмите START в Telegram-боте",
+            fill=self.text_secondary,
+            font=text_font,
+            anchor="center",
+            tags="username_dialog"
+        )
+        
+        self.bg_canvas.create_text(
+            cx, y1 + 130,
+            text="Игра начнётся автоматически",
+            fill=self.text_muted,
+            font=text_font,
+            anchor="center",
+            tags="username_dialog"
+        )
+        
+        # Индикатор загрузки (точки)
+        self._loading_dots = 0
+        self.bg_canvas.create_text(
+            cx, y1 + 175,
+            text="●○○",
+            fill=self.o_color,
+            font=header_font,
+            anchor="center",
+            tags=("username_dialog", "loading_dots")
+        )
+        
+        # Поднимаем диалог
+        self.bg_canvas.tag_raise("username_dialog")
+        
+        # Начинаем проверку подписки
+        self._checking_subscription = True
+        self._check_subscription_loop()
+
+    def _check_subscription_loop(self) -> None:
+        """Периодически проверяет, подписался ли пользователь."""
+        if not self._checking_subscription:
+            return
+        
+        # Анимация точек загрузки
+        self._loading_dots = (self._loading_dots + 1) % 3
+        dots = ["●○○", "○●○", "○○●"][self._loading_dots]
+        self.bg_canvas.delete("loading_dots")
+        
+        # Получаем позицию для точек
+        canvas_width = self.bg_canvas.winfo_width()
+        canvas_height = self.bg_canvas.winfo_height()
+        if canvas_width <= 1:
+            canvas_width = 520
+        if canvas_height <= 1:
+            canvas_height = 820
+        cx = canvas_width // 2
+        cy = canvas_height // 2
+        dialog_height = 220
+        y1 = cy - dialog_height // 2
+        
+        try:
+            header_font = tkfont.Font(family="Palatino", size=20, weight="bold")
+        except Exception:
+            header_font = tkfont.Font(family="Arial", size=20, weight="bold")
+        
+        self.bg_canvas.create_text(
+            cx, y1 + 175,
+            text=dots,
+            fill=self.o_color,
+            font=header_font,
+            anchor="center",
+            tags=("username_dialog", "loading_dots")
+        )
+        
+        # Проверяем подписку
+        chat_id = check_user_subscribed(self._telegram_username)
+        
+        if chat_id:
+            # Пользователь подписался — сразу начинаем игру!
+            self._telegram_chat_id = chat_id
+            self._checking_subscription = False
+            
+            # Сразу запускаем игру
+            self._username_entered = True
+            self._game_blocked = False
+            self._dialog_visible = False
+            self.bg_canvas.delete("username_dialog")
+            self.bg_canvas.delete("username_overlay")
+            
+            # Восстанавливаем UI игры
+            self._draw_background()
+            self._draw_cube()
+            self._draw_button()
+        else:
+            # Проверяем снова через 2 секунды
+            self.root.after(2000, self._check_subscription_loop)
+
+    def _draw_button(self) -> None:
+        """Рисует кнопку на canvas."""
+        # Не рисуем кнопку, если открыт диалог регистрации
+        if self._dialog_visible:
+            return
+        
+        self.bg_canvas.delete("button")
+        
+        cx = self._btn_x
+        cy = self._btn_y
+        
+        # Измеряем текст для размера кнопки
+        text_width = self.btn_font.measure(self._btn_text)
+        text_height = self.btn_font.metrics("linespace")
+        
+        pad_x = 35
+        pad_y = 15
+        width = text_width + pad_x * 2
+        height = text_height + pad_y * 2
+        
+        # Цвет кнопки
+        color = self.moon_pink_hover if self._btn_hovered else self._btn_color
+        
+        # Скруглённый прямоугольник (через овалы и прямоугольники)
+        r = 8  # радиус скругления
+        x1, y1 = cx - width // 2, cy - height // 2
+        x2, y2 = cx + width // 2, cy + height // 2
+        
+        # Основной прямоугольник
+        self.bg_canvas.create_rectangle(
+            x1 + r, y1, x2 - r, y2,
+            fill=color, outline="", tags="button"
+        )
+        self.bg_canvas.create_rectangle(
+            x1, y1 + r, x2, y2 - r,
+            fill=color, outline="", tags="button"
+        )
+        # Углы
+        self.bg_canvas.create_oval(x1, y1, x1 + r*2, y1 + r*2, fill=color, outline="", tags="button")
+        self.bg_canvas.create_oval(x2 - r*2, y1, x2, y1 + r*2, fill=color, outline="", tags="button")
+        self.bg_canvas.create_oval(x1, y2 - r*2, x1 + r*2, y2, fill=color, outline="", tags="button")
+        self.bg_canvas.create_oval(x2 - r*2, y2 - r*2, x2, y2, fill=color, outline="", tags="button")
+        
+        # Текст кнопки
+        self.bg_canvas.create_text(
+            cx, cy,
+            text=self._btn_text,
+            fill="#1A1E2E",
+            font=self.btn_font,
+            anchor="center",
+            tags="button"
+        )
+        
+        # Сохраняем границы для проверки клика
+        self._btn_bounds = (x1, y1, x2, y2)
+
+    def _draw_promo_overlay(self) -> None:
+        """Рисует полупрозрачный оверлей с промокодом по центру."""
+        self.bg_canvas.delete("promo_overlay")
+        
+        if not self._promo_code:
+            return
+        
+        # Получаем размеры canvas
+        canvas_width = self.bg_canvas.winfo_width()
+        canvas_height = self.bg_canvas.winfo_height()
+        
+        if canvas_width <= 1:
+            canvas_width = 520
+        if canvas_height <= 1:
+            canvas_height = 820
+        
+        cx = canvas_width // 2
+        cy = canvas_height // 2
+        
+        # Текст оверлея
+        line1 = "Ваш промокод"
+        line2 = self._promo_code
+        line3 = "отправлен в телеграм"
+        
+        # Шрифты
+        try:
+            promo_font = tkfont.Font(family="Palatino", size=20, weight="bold")
+            code_font = tkfont.Font(family="Palatino", size=36, weight="bold")
+        except Exception:
+            promo_font = tkfont.Font(family="Arial", size=20, weight="bold")
+            code_font = tkfont.Font(family="Arial", size=36, weight="bold")
+        
+        # Размеры текста
+        line1_width = promo_font.measure(line1)
+        line2_width = code_font.measure(line2)
+        line3_width = promo_font.measure(line3)
+        line_height = promo_font.metrics("linespace")
+        code_height = code_font.metrics("linespace")
+        
+        max_width = max(line1_width, line2_width, line3_width)
+        total_height = line_height + code_height + line_height + 30
+        
+        pad_x = 40
+        pad_y = 30
+        box_width = max_width + pad_x * 2
+        box_height = total_height + pad_y * 2
+        
+        x1, y1 = cx - box_width // 2, cy - box_height // 2
+        x2, y2 = cx + box_width // 2, cy + box_height // 2
+        
+        # Внешняя тень
+        shadow_offset = 6
+        r = 16
+        self._draw_rounded_rect(
+            x1 + shadow_offset, y1 + shadow_offset, 
+            x2 + shadow_offset, y2 + shadow_offset, 
+            r, "#000000", "promo_overlay"
+        )
+        
+        # Основной фон (тёмный)
+        self._draw_rounded_rect(x1, y1, x2, y2, r, "#1A1E2E", "promo_overlay")
+        
+        # Внутренняя рамка (свечение)
+        self._draw_rounded_rect_outline(x1 + 3, y1 + 3, x2 - 3, y2 - 3, r - 2, self.win_color, 2, "promo_overlay")
+        
+        # Текст
+        text_y = y1 + pad_y + line_height // 2
+        
+        self.bg_canvas.create_text(
+            cx, text_y,
+            text=line1,
+            fill=self.text_secondary,
+            font=promo_font,
+            anchor="center",
+            tags="promo_overlay"
+        )
+        
+        text_y += line_height // 2 + 15 + code_height // 2
+        
+        # Промокод (большой, яркий)
+        self.bg_canvas.create_text(
+            cx, text_y,
+            text=line2,
+            fill=self.win_color,
+            font=code_font,
+            anchor="center",
+            tags="promo_overlay"
+        )
+        
+        text_y += code_height // 2 + 15 + line_height // 2
+        
+        self.bg_canvas.create_text(
+            cx, text_y,
+            text=line3,
+            fill=self.text_secondary,
+            font=promo_font,
+            anchor="center",
+            tags="promo_overlay"
+        )
+        
+        # Поднимаем оверлей наверх
+        self.bg_canvas.tag_raise("promo_overlay")
+
+    def _draw_rounded_rect(self, x1: float, y1: float, x2: float, y2: float, 
+                           r: float, color: str, tag: str) -> None:
+        """Рисует скруглённый прямоугольник."""
+        self.bg_canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=color, outline="", tags=tag)
+        self.bg_canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=color, outline="", tags=tag)
+        self.bg_canvas.create_oval(x1, y1, x1 + r*2, y1 + r*2, fill=color, outline="", tags=tag)
+        self.bg_canvas.create_oval(x2 - r*2, y1, x2, y1 + r*2, fill=color, outline="", tags=tag)
+        self.bg_canvas.create_oval(x1, y2 - r*2, x1 + r*2, y2, fill=color, outline="", tags=tag)
+        self.bg_canvas.create_oval(x2 - r*2, y2 - r*2, x2, y2, fill=color, outline="", tags=tag)
+
+    def _draw_rounded_rect_outline(self, x1: float, y1: float, x2: float, y2: float,
+                                    r: float, color: str, width: int, tag: str) -> None:
+        """Рисует обводку скруглённого прямоугольника."""
+        self.bg_canvas.create_line(x1 + r, y1, x2 - r, y1, fill=color, width=width, tags=tag)
+        self.bg_canvas.create_line(x1 + r, y2, x2 - r, y2, fill=color, width=width, tags=tag)
+        self.bg_canvas.create_line(x1, y1 + r, x1, y2 - r, fill=color, width=width, tags=tag)
+        self.bg_canvas.create_line(x2, y1 + r, x2, y2 - r, fill=color, width=width, tags=tag)
+        self.bg_canvas.create_arc(x1, y1, x1 + r*2, y1 + r*2, start=90, extent=90, 
+                                   style="arc", outline=color, width=width, tags=tag)
+        self.bg_canvas.create_arc(x2 - r*2, y1, x2, y1 + r*2, start=0, extent=90,
+                                   style="arc", outline=color, width=width, tags=tag)
+        self.bg_canvas.create_arc(x1, y2 - r*2, x1 + r*2, y2, start=180, extent=90,
+                                   style="arc", outline=color, width=width, tags=tag)
+        self.bg_canvas.create_arc(x2 - r*2, y2 - r*2, x2, y2, start=270, extent=90,
+                                   style="arc", outline=color, width=width, tags=tag)
+
+    def _hide_promo_overlay(self) -> None:
+        """Скрывает оверлей с промокодом."""
+        self.bg_canvas.delete("promo_overlay")
+
+    def _on_resize(self, event: tk.Event) -> None:
+        """Обработка изменения размера окна."""
+        # Центрируем элементы по горизонтали
+        cx = event.width // 2
+        self._cube_center_x = cx
+        self._btn_x = cx
+        
+        # Перерисовываем фон (методы сами проверяют _dialog_visible)
+        if self._dialog_visible:
+            self._draw_background_only()
+            # Перерисовываем диалог по центру
+            self._redraw_current_dialog()
+        else:
+            self._draw_background()
+            self._draw_cube()
+    
+    def _redraw_current_dialog(self) -> None:
+        """Перерисовывает текущий диалог по центру окна."""
+        if not self._dialog_visible:
+            return
+        
+        # Сохраняем текст из поля ввода если оно есть
+        saved_text = ""
+        if hasattr(self, '_username_entry') and self._username_entry.winfo_exists():
+            saved_text = self._username_entry.get()
+        
+        if self._checking_subscription:
+            # Второй шаг — ожидание подписки
+            self._show_step2_dialog()
+        else:
+            # Первый шаг — ввод ника
+            self._show_username_dialog()
+            # Восстанавливаем текст
+            if saved_text and hasattr(self, '_username_entry'):
+                self._username_entry.delete(0, tk.END)
+                self._username_entry.insert(0, saved_text)
+
 
     # ══════════════════════════════════════════════════════════════════════
     # 3D КУБА
@@ -381,8 +1032,8 @@ class TicTacToeApp:
 
     def _get_cube_transform(self, angle: float = 0.0) -> dict:
         """Возвращает параметры трансформации куба."""
-        cx = 230
-        cy = 200
+        cx = self._cube_center_x + self._shake_offset_x
+        cy = self._cube_center_y + self._shake_offset_y
         size = self.CUBE_SIZE
         
         flip_rad = math.radians(angle)
@@ -430,9 +1081,59 @@ class TicTacToeApp:
         
         return px, py
 
+    def _transform_normal(self, nx: float, ny: float, nz: float, transform: dict) -> tuple[float, float, float]:
+        """Трансформирует нормаль грани согласно вращениям куба."""
+        tilt_x = transform["tilt_x"]
+        tilt_y = transform["tilt_y"]
+        flip = transform["flip_angle"]
+        
+        # Поворот вокруг оси Y (переворот куба)
+        nx_rot = nx * math.cos(flip) + nz * math.sin(flip)
+        nz_rot = -nx * math.sin(flip) + nz * math.cos(flip)
+        nx, nz = nx_rot, nz_rot
+        
+        # Наклон вокруг оси Y
+        nx_rot = nx * math.cos(tilt_y) + nz * math.sin(tilt_y)
+        nz_rot = -nx * math.sin(tilt_y) + nz * math.cos(tilt_y)
+        nx, nz = nx_rot, nz_rot
+        
+        # Наклон вокруг оси X
+        ny_rot = ny * math.cos(tilt_x) - nz * math.sin(tilt_x)
+        nz_rot = ny * math.sin(tilt_x) + nz * math.cos(tilt_x)
+        ny, nz = ny_rot, nz_rot
+        
+        return nx, ny, nz
+
+    def _get_face_depth(self, cx: float, cy: float, cz: float, transform: dict) -> float:
+        """Вычисляет глубину центра грани после трансформации."""
+        tilt_x = transform["tilt_x"]
+        tilt_y = transform["tilt_y"]
+        flip = transform["flip_angle"]
+        
+        # Поворот вокруг оси Y (переворот куба)
+        x_rot = cx * math.cos(flip) + cz * math.sin(flip)
+        z_rot = -cx * math.sin(flip) + cz * math.cos(flip)
+        cx, cz = x_rot, z_rot
+        
+        # Наклон вокруг оси Y
+        x_rot = cx * math.cos(tilt_y) + cz * math.sin(tilt_y)
+        z_rot = -cx * math.sin(tilt_y) + cz * math.cos(tilt_y)
+        cx, cz = x_rot, z_rot
+        
+        # Наклон вокруг оси X
+        y_rot = cy * math.cos(tilt_x) - cz * math.sin(tilt_x)
+        z_rot = cy * math.sin(tilt_x) + cz * math.cos(tilt_x)
+        cy, cz = y_rot, z_rot
+        
+        return cz
+
     def _draw_cube(self) -> None:
         """Отрисовка 3D-куба с игровым полем на передней грани."""
-        self.cube_canvas.delete("all")
+        # Не рисуем куб, если открыт диалог регистрации
+        if self._dialog_visible:
+            return
+        
+        self.bg_canvas.delete("cube")
         
         transform = self._get_cube_transform(self._flip_angle)
         size = transform["size"]
@@ -455,87 +1156,171 @@ class TicTacToeApp:
         # Проецируем вершины
         vertices_2d = [self._project_point(x, y, z, transform) for x, y, z in vertices_3d]
         
-        # Тень под кубом
-        shadow_offset = 12
-        bottom_verts = [vertices_2d[i] for i in [3, 2, 6, 7]]
-        shadow_verts = []
-        for px, py in bottom_verts:
-            shadow_verts.extend([px + shadow_offset, py + shadow_offset * 0.4])
-        self.cube_canvas.create_polygon(
-            shadow_verts,
-            fill=darken_color(self.bg_main, 0.92),
-            outline="",
-        )
+        # Определяем грани куба: (индексы вершин, нормаль, центр, тип)
+        faces = [
+            # Передняя грань (z+)
+            {
+                "indices": [0, 1, 2, 3],
+                "normal": (0, 0, 1),
+                "center": (0, 0, half),
+                "type": "front",
+            },
+            # Задняя грань (z-)
+            {
+                "indices": [5, 4, 7, 6],
+                "normal": (0, 0, -1),
+                "center": (0, 0, -half),
+                "type": "back",
+            },
+            # Верхняя грань (y+)
+            {
+                "indices": [0, 1, 5, 4],
+                "normal": (0, 1, 0),
+                "center": (0, half, 0),
+                "type": "top",
+            },
+            # Нижняя грань (y-)
+            {
+                "indices": [3, 2, 6, 7],
+                "normal": (0, -1, 0),
+                "center": (0, -half, 0),
+                "type": "bottom",
+            },
+            # Правая грань (x+)
+            {
+                "indices": [1, 2, 6, 5],
+                "normal": (1, 0, 0),
+                "center": (half, 0, 0),
+                "type": "right",
+            },
+            # Левая грань (x-)
+            {
+                "indices": [0, 3, 7, 4],
+                "normal": (-1, 0, 0),
+                "center": (-half, 0, 0),
+                "type": "left",
+            },
+        ]
         
-        # Определяем видимость граней по углу переворота
-        flip_rad = transform["flip_angle"]
-        flip_cos = math.cos(flip_rad)
-        flip_sin = math.sin(flip_rad)
-        
-        # Рисуем грани в порядке от дальних к ближним
-        
-        # Задняя грань (видна при перевороте)
-        if flip_cos < 0:
-            back_face = [vertices_2d[i] for i in [4, 5, 6, 7]]
-            self.cube_canvas.create_polygon(
-                [coord for pt in back_face for coord in pt],
-                fill=self.cube_top,
-                outline=darken_color(self.cube_top, 0.9),
-                width=2,
-            )
-        
-        # Верхняя грань (непрозрачная, с сеткой)
-        top_face = [vertices_2d[i] for i in [0, 1, 5, 4]]
-        self.cube_canvas.create_polygon(
-            [coord for pt in top_face for coord in pt],
-            fill="#E0D5CC",  # Более насыщенный непрозрачный цвет
-            outline="#C9BDB3",
-            width=1,
-        )
-        # Сетка на верхней грани
-        top_grid_color = "#C4B8AE"
-        for i in range(1, 3):
-            t = i / 3
-            p1 = self._project_point(-half + t * size, half, half, transform)
-            p2 = self._project_point(-half + t * size, half, -half, transform)
-            self.cube_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=top_grid_color, width=1)
-            p1 = self._project_point(-half, half, half - t * size, transform)
-            p2 = self._project_point(half, half, half - t * size, transform)
-            self.cube_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=top_grid_color, width=1)
-        
-        # Правая боковая грань (непрозрачная, с сеткой)
-        if flip_sin > -0.7:
-            right_face = [vertices_2d[i] for i in [1, 2, 6, 5]]
-            self.cube_canvas.create_polygon(
-                [coord for pt in right_face for coord in pt],
-                fill="#D5C9BF",  # Более насыщенный непрозрачный цвет
-                outline="#C0B4AA",
-                width=1,
-            )
-            # Сетка на правой грани
-            right_grid_color = "#BAA99D"
-            for i in range(1, 3):
-                t = i / 3
-                p1 = self._project_point(half, half - t * size, half, transform)
-                p2 = self._project_point(half, half - t * size, -half, transform)
-                self.cube_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=right_grid_color, width=1)
-                p1 = self._project_point(half, half, half - t * size, transform)
-                p2 = self._project_point(half, -half, half - t * size, transform)
-                self.cube_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=right_grid_color, width=1)
-        
-        
-        # Передняя грань (ИГРОВОЕ ПОЛЕ) — рисуем последней
-        if flip_cos > 0:
-            front_face = [vertices_2d[i] for i in [0, 1, 2, 3]]
-            self.cube_canvas.create_polygon(
-                [coord for pt in front_face for coord in pt],
-                fill=self.cube_top,
-                outline=darken_color(self.cube_top, 0.85),
-                width=2,
-            )
+        # Определяем видимость и глубину каждой грани
+        visible_faces = []
+        for face in faces:
+            # Трансформируем нормаль
+            nx, ny, nz = self._transform_normal(*face["normal"], transform)
             
-            # Рисуем игровое поле на передней грани
-            self._draw_board_on_face(transform)
+            # Грань видна, если её нормаль направлена к камере (z > 0 после трансформации)
+            if nz > -0.01:  # Небольшой допуск для граничных случаев
+                # Вычисляем глубину центра грани
+                depth = self._get_face_depth(*face["center"], transform)
+                visible_faces.append((face, depth))
+        
+        # Сортируем грани по глубине (от дальних к ближним)
+        visible_faces.sort(key=lambda x: x[1])
+        
+        # Рисуем грани в правильном порядке
+        for face, depth in visible_faces:
+            face_type = face["type"]
+            face_2d = [vertices_2d[i] for i in face["indices"]]
+            points = [coord for pt in face_2d for coord in pt]
+            
+            if face_type == "front":
+                # Передняя грань — игровое поле
+                self.bg_canvas.create_polygon(
+                    points,
+                    fill=self.cube_top,
+                    outline="", tags="cube",
+                )
+                # Рисуем игровое поле на передней грани
+                self._draw_board_on_face(transform)
+                
+            elif face_type == "back":
+                # Задняя грань
+                self.bg_canvas.create_polygon(
+                    points,
+                    fill=self.cube_top,
+                    outline=darken_color(self.cube_top, 0.9),
+                    width=2, tags="cube",
+                )
+                
+            elif face_type == "top":
+                # Верхняя грань с сеткой
+                self.bg_canvas.create_polygon(
+                    points,
+                    fill="#1A1F35",
+                    outline="#2A3555",
+                    width=1, tags="cube",
+                )
+                # Сетка на верхней грани
+                top_grid_color = "#3A4575"
+                for i in range(1, 3):
+                    t = i / 3
+                    p1 = self._project_point(-half + t * size, half, half, transform)
+                    p2 = self._project_point(-half + t * size, half, -half, transform)
+                    self.bg_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=top_grid_color, width=1, tags="cube")
+                    p1 = self._project_point(-half, half, half - t * size, transform)
+                    p2 = self._project_point(half, half, half - t * size, transform)
+                    self.bg_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=top_grid_color, width=1, tags="cube")
+                    
+            elif face_type == "bottom":
+                # Нижняя грань
+                self.bg_canvas.create_polygon(
+                    points,
+                    fill="#121728",
+                    outline="#222740",
+                    width=1, tags="cube",
+                )
+                # Сетка на нижней грани
+                bottom_grid_color = "#2A3050"
+                for i in range(1, 3):
+                    t = i / 3
+                    p1 = self._project_point(-half + t * size, -half, half, transform)
+                    p2 = self._project_point(-half + t * size, -half, -half, transform)
+                    self.bg_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=bottom_grid_color, width=1, tags="cube")
+                    p1 = self._project_point(-half, -half, half - t * size, transform)
+                    p2 = self._project_point(half, -half, half - t * size, transform)
+                    self.bg_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=bottom_grid_color, width=1, tags="cube")
+                    
+            elif face_type == "right":
+                # Правая грань с сеткой
+                self.bg_canvas.create_polygon(
+                    points,
+                    fill="#151A2A",
+                    outline="#252A45",
+                    width=1, tags="cube",
+                )
+                # Сетка на правой грани
+                right_grid_color = "#2A3055"
+                for i in range(1, 3):
+                    t = i / 3
+                    p1 = self._project_point(half, half - t * size, half, transform)
+                    p2 = self._project_point(half, half - t * size, -half, transform)
+                    self.bg_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=right_grid_color, width=1, tags="cube")
+                    p1 = self._project_point(half, half, half - t * size, transform)
+                    p2 = self._project_point(half, -half, half - t * size, transform)
+                    self.bg_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=right_grid_color, width=1, tags="cube")
+                    
+            elif face_type == "left":
+                # Левая грань с сеткой
+                self.bg_canvas.create_polygon(
+                    points,
+                    fill="#181D30",
+                    outline="#282D48",
+                    width=1, tags="cube",
+                )
+                # Сетка на левой грани
+                left_grid_color = "#303560"
+                for i in range(1, 3):
+                    t = i / 3
+                    p1 = self._project_point(-half, half - t * size, half, transform)
+                    p2 = self._project_point(-half, half - t * size, -half, transform)
+                    self.bg_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=left_grid_color, width=1, tags="cube")
+                    p1 = self._project_point(-half, half, half - t * size, transform)
+                    p2 = self._project_point(-half, -half, half - t * size, transform)
+                    self.bg_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=left_grid_color, width=1, tags="cube")
+        
+        # Если диалог открыт, поднимаем его наверх
+        if self._dialog_visible:
+            self.bg_canvas.tag_raise("username_dialog")
 
     def _draw_board_on_face(self, transform: dict) -> None:
         """Рисует игровое поле на передней грани куба."""
@@ -550,18 +1335,18 @@ class TicTacToeApp:
             x_offset = -half + i * cell
             p1 = self._project_point(x_offset, half, z_front, transform)
             p2 = self._project_point(x_offset, -half, z_front, transform)
-            self.cube_canvas.create_line(
+            self.bg_canvas.create_line(
                 p1[0], p1[1], p2[0], p2[1],
-                fill=self.grid_line, width=2,
+                fill=self.grid_line, width=2, tags="cube",
             )
             
             # Горизонтальные линии (по Y)
             y_offset = -half + i * cell
             p1 = self._project_point(-half, y_offset, z_front, transform)
             p2 = self._project_point(half, y_offset, z_front, transform)
-            self.cube_canvas.create_line(
+            self.bg_canvas.create_line(
                 p1[0], p1[1], p2[0], p2[1],
-                fill=self.grid_line, width=2,
+                fill=self.grid_line, width=2, tags="cube",
             )
         
         # Символы на поле
@@ -591,7 +1376,7 @@ class TicTacToeApp:
                 self._draw_winning_line_3d(winning, transform)
 
     def _draw_cell_highlight(self, cx: float, cy: float, cz: float, cell: float, transform: dict) -> None:
-        """Подсветка ячейки при наведении."""
+        """Подсветка ячейки при наведении — космическое свечение."""
         half_cell = cell / 2 * 0.88
         # На передней грани: X — горизонталь, Y — вертикаль
         corners = [
@@ -605,11 +1390,32 @@ class TicTacToeApp:
             px, py = self._project_point(x, y, z, transform)
             points.extend([px, py])
         
-        self.cube_canvas.create_polygon(
+        # Неоновое свечение
+        self.bg_canvas.create_polygon(
             points,
-            fill=self.bg_cell_hover,
-            outline=self.border_accent,
-            width=2,
+            fill="#2A3555",
+            outline="#7B68EE",
+            width=2, tags="cube",
+        )
+        
+        # Внутреннее мягкое свечение
+        inner_points = []
+        half_inner = cell / 2 * 0.75
+        inner_corners = [
+            (cx - half_inner, cy + half_inner, cz),
+            (cx + half_inner, cy + half_inner, cz),
+            (cx + half_inner, cy - half_inner, cz),
+            (cx - half_inner, cy - half_inner, cz),
+        ]
+        for x, y, z in inner_corners:
+            px, py = self._project_point(x, y, z, transform)
+            inner_points.extend([px, py])
+        
+        self.bg_canvas.create_polygon(
+            inner_points,
+            fill="",
+            outline="#5A4AAA",
+            width=1, tags="cube",
         )
 
     def _draw_x_3d(self, cx: float, cy: float, cz: float, size: float, transform: dict) -> None:
@@ -623,32 +1429,32 @@ class TicTacToeApp:
             # Диагональ \ (верх-лево → низ-право)
             p1 = self._project_point(cx - s, cy + s, cz, transform)
             p2 = self._project_point(cx + s, cy - s, cz, transform)
-            self.cube_canvas.create_line(
+            self.bg_canvas.create_line(
                 p1[0], p1[1], p2[0], p2[1],
-                fill=glow_color, width=self.LINE_WIDTH + offset * 2, capstyle="round",
+                fill=glow_color, width=self.LINE_WIDTH + offset * 2, capstyle="round", tags="cube",
             )
             
             # Диагональ / (верх-право → низ-лево)
             p3 = self._project_point(cx + s, cy + s, cz, transform)
             p4 = self._project_point(cx - s, cy - s, cz, transform)
-            self.cube_canvas.create_line(
+            self.bg_canvas.create_line(
                 p3[0], p3[1], p4[0], p4[1],
-                fill=glow_color, width=self.LINE_WIDTH + offset * 2, capstyle="round",
+                fill=glow_color, width=self.LINE_WIDTH + offset * 2, capstyle="round", tags="cube",
             )
         
         # Основные линии
         p1 = self._project_point(cx - size, cy + size, cz, transform)
         p2 = self._project_point(cx + size, cy - size, cz, transform)
-        self.cube_canvas.create_line(
+        self.bg_canvas.create_line(
             p1[0], p1[1], p2[0], p2[1],
-            fill=self.x_color, width=self.LINE_WIDTH, capstyle="round",
+            fill=self.x_color, width=self.LINE_WIDTH, capstyle="round", tags="cube",
         )
         
         p3 = self._project_point(cx + size, cy + size, cz, transform)
         p4 = self._project_point(cx - size, cy - size, cz, transform)
-        self.cube_canvas.create_line(
+        self.bg_canvas.create_line(
             p3[0], p3[1], p4[0], p4[1],
-            fill=self.x_color, width=self.LINE_WIDTH, capstyle="round",
+            fill=self.x_color, width=self.LINE_WIDTH, capstyle="round", tags="cube",
         )
 
     def _draw_o_3d(self, cx: float, cy: float, cz: float, radius: float, transform: dict) -> None:
@@ -676,7 +1482,7 @@ class TicTacToeApp:
             points.extend([px, py])
         
         points.extend(points[:2])  # Замыкаем
-        self.cube_canvas.create_line(points, fill=color, width=width, smooth=True)
+        self.bg_canvas.create_line(points, fill=color, width=width, smooth=True, tags="cube")
 
     def _draw_winning_line_3d(self, line: tuple[int, int, int], transform: dict) -> None:
         """Рисует линию победы в 3D на передней грани."""
@@ -701,17 +1507,17 @@ class TicTacToeApp:
             
             p1 = self._project_point(*start, transform)
             p2 = self._project_point(*end, transform)
-            self.cube_canvas.create_line(
+            self.bg_canvas.create_line(
                 p1[0], p1[1], p2[0], p2[1],
-                fill=glow_color, width=self.LINE_WIDTH + offset * 3, capstyle="round",
+                fill=glow_color, width=self.LINE_WIDTH + offset * 3, capstyle="round", tags="cube",
             )
         
         # Основная линия
         p1 = self._project_point(*start, transform)
         p2 = self._project_point(*end, transform)
-        self.cube_canvas.create_line(
+        self.bg_canvas.create_line(
             p1[0], p1[1], p2[0], p2[1],
-            fill=self.win_color, width=self.LINE_WIDTH + 2, capstyle="round",
+            fill=self.win_color, width=self.LINE_WIDTH + 2, capstyle="round", tags="cube",
         )
 
     # ══════════════════════════════════════════════════════════════════════
@@ -734,6 +1540,30 @@ class TicTacToeApp:
         self._draw_cube()
         
         anim_id = self.root.after(self.FLIP_DELAY, lambda: self._animate_flip(step + 1))
+        self._animation_ids.append(anim_id)
+
+    def _animate_shake(self, step: int = 0, total_steps: int = 20) -> None:
+        """Анимация тряски куба при победе."""
+        if step >= total_steps:
+            self._is_shaking = False
+            self._shake_offset_x = 0.0
+            self._shake_offset_y = 0.0
+            self._draw_cube()
+            return
+        
+        self._is_shaking = True
+        
+        # Уменьшающаяся амплитуда тряски
+        decay = 1 - (step / total_steps)
+        amplitude = 12 * decay
+        
+        # Случайное смещение
+        self._shake_offset_x = random.uniform(-amplitude, amplitude)
+        self._shake_offset_y = random.uniform(-amplitude, amplitude)
+        
+        self._draw_cube()
+        
+        anim_id = self.root.after(30, lambda: self._animate_shake(step + 1, total_steps))
         self._animation_ids.append(anim_id)
 
     def _animate_symbol(self, idx: int, symbol: str, step: int = 0) -> None:
@@ -808,7 +1638,22 @@ class TicTacToeApp:
     # ОБРАБОТЧИКИ СОБЫТИЙ
     # ══════════════════════════════════════════════════════════════════════
 
+    def _is_over_button(self, x: int, y: int) -> bool:
+        """Проверяет, находится ли курсор над кнопкой."""
+        if not hasattr(self, '_btn_bounds'):
+            return False
+        x1, y1, x2, y2 = self._btn_bounds
+        return x1 <= x <= x2 and y1 <= y <= y2
+
     def _on_mouse_move(self, event: tk.Event) -> None:
+        # Проверка hover над кнопкой
+        over_btn = self._is_over_button(event.x, event.y)
+        if over_btn != self._btn_hovered:
+            self._btn_hovered = over_btn
+            self._draw_button()
+            # Меняем курсор
+            self.bg_canvas.configure(cursor="hand2" if over_btn else "")
+        
         if self.game_over or self._is_flipping:
             return
         cell = self._get_cell_at(event.x, event.y)
@@ -817,11 +1662,21 @@ class TicTacToeApp:
             self._draw_cube()
 
     def _on_mouse_leave(self, event: tk.Event) -> None:
+        if self._btn_hovered:
+            self._btn_hovered = False
+            self._draw_button()
+            self.bg_canvas.configure(cursor="")
         if self._hover_cell is not None:
             self._hover_cell = None
             self._draw_cube()
 
     def _on_click(self, event: tk.Event) -> None:
+        # Проверка клика по кнопке
+        if self._is_over_button(event.x, event.y):
+            if self._btn_command:
+                self._btn_command()
+            return
+        
         if self.game_over or self._is_flipping:
             return
         cell = self._get_cell_at(event.x, event.y)
@@ -838,9 +1693,18 @@ class TicTacToeApp:
         self._telegram_sent = False
         self._promo_code = None
         self._hover_cell = None
+        self._is_flipping = False  # Сбрасываем флаг анимации
+        self._flip_angle = 0.0
+        self._is_shaking = False
+        self._shake_offset_x = 0.0
+        self._shake_offset_y = 0.0
+        
+        # Скрываем оверлеи
+        self.bg_canvas.delete("promo_overlay")
+        self.bg_canvas.delete("loss_overlay")
         
         # Анимация переворота
-        if animate and not self._is_flipping:
+        if animate:
             self._is_flipping = True
             self._game_number += 1
             self._flip_direction = 1 if self._game_number % 2 == 1 else -1
@@ -848,42 +1712,23 @@ class TicTacToeApp:
         else:
             self._draw_cube()
 
-        # Сброс UI
-        self.status_frame.configure(bg="#FFFFFF", highlightbackground=self.border_light)
-        self.status_inner.configure(bg="#FFFFFF")
-        self.separator.configure(bg=self.border_light)
-        
-        self.status_indicator.itemconfig(self._status_dot, fill=self.x_color)
-        self.status_indicator.configure(bg="#FFFFFF")
-        self.status_lbl.configure(text="Твой ход", fg=self.text_primary, bg="#FFFFFF")
-        self.detail_lbl.configure(
-            text="Ты играешь за × · Компьютер за ○",
-            fg=self.text_muted, bg="#FFFFFF",
-        )
-        self._hide_promo_btn()
-
-    def _hide_promo_btn(self) -> None:
-        self.actions.pack_forget()
-
-    def _show_promo_btn(self) -> None:
-        self.retry_btn.pack_forget()
-        self.actions.pack(pady=(0, 14))
-        self.copy_btn.pack(ipadx=18, ipady=8)
-
-    def _show_retry_btn(self) -> None:
-        self.copy_btn.pack_forget()
-        self.actions.pack(pady=(0, 14))
-        self.retry_btn.pack(ipadx=18, ipady=8)
+        # Сброс кнопки
+        self._btn_text = "Начать заново"
+        self._btn_color = self.moon_pink
+        self._btn_command = self.reset
+        self._draw_button()
 
     def copy_promo(self) -> None:
         if not self._promo_code:
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(self._promo_code)
-        self.detail_lbl.configure(text="Промокод скопирован!", fg=self.win_color, bg=self.win_bg)
+        self._btn_text = "✨ Скопировано! Нажми для новой игры"
+        self._btn_command = self.reset
+        self._draw_button()
 
     def on_player_click(self, idx: int) -> None:
-        if self.game_over or self.board[idx] or self._is_flipping:
+        if self._game_blocked or self.game_over or self.board[idx] or self._is_flipping:
             return
 
         self._place(idx, "X")
@@ -892,8 +1737,6 @@ class TicTacToeApp:
         if self.game_over:
             return
 
-        self.status_indicator.itemconfig(self._status_dot, fill=self.o_color)
-        self.status_lbl.configure(text="Ход компьютера", fg=self.text_secondary)
         self.root.after(450, self._computer_turn)
 
     def _computer_turn(self) -> None:
@@ -902,9 +1745,6 @@ class TicTacToeApp:
         idx = best_move_for_o(self.board)
         self._place(idx, "O")
         self._after_move()
-        if not self.game_over:
-            self.status_indicator.itemconfig(self._status_dot, fill=self.x_color)
-            self.status_lbl.configure(text="Твой ход", fg=self.text_primary)
 
     def _place(self, idx: int, symbol: str) -> None:
         self.board[idx] = symbol
@@ -919,59 +1759,162 @@ class TicTacToeApp:
         self.root.after(self.ANIM_STEPS * self.ANIM_DELAY + 50, self._draw_cube)
         
         if result == "draw":
-            self._set_status_style(self.draw_bg, self.draw_color)
-            self.status_indicator.itemconfig(self._status_dot, fill=self.draw_color)
-            self.status_lbl.configure(text="Ничья", fg=self.draw_color, bg=self.draw_bg)
-            self.detail_lbl.configure(
-                text="Отличная партия! Попробуй ещё раз",
-                fg=self.text_secondary, bg=self.draw_bg,
-            )
-            self.root.after(350, self._show_retry_btn)
+            self.root.after(350, self._handle_draw)
             return
 
         if result == "X":
-            self._handle_player_win()
+            self.root.after(350, self._handle_player_win)
         else:
-            self._handle_player_loss()
+            self.root.after(350, self._handle_player_loss)
 
-    def _set_status_style(self, bg_color: str, accent_color: str) -> None:
-        self.status_frame.configure(bg=bg_color)
-        self.status_inner.configure(bg=bg_color)
-        self.status_indicator.configure(bg=bg_color)
-        self.status_lbl.configure(bg=bg_color)
-        self.detail_lbl.configure(bg=bg_color)
-        self.separator.configure(bg=lerp_color(bg_color, accent_color, 0.3))
-        self.actions.configure(bg=bg_color)
+    def _handle_draw(self) -> None:
+        self._btn_text = "Ничья — ещё раз?"
+        self._btn_command = self.reset
+        self._draw_button()
 
     def _handle_player_win(self) -> None:
         self._promo_code = str(random.randint(10000, 99999))
         
-        self._set_status_style(self.win_bg, self.win_color)
-        self.status_indicator.itemconfig(self._status_dot, fill=self.win_color)
-        self.status_lbl.configure(text="Победа!", fg=self.win_color, bg=self.win_bg)
-        self.detail_lbl.configure(
-            text=f"Твой промокод: {self._promo_code}",
-            fg=self.text_primary, bg=self.win_bg,
-        )
-        self.root.after(350, self._show_promo_btn)
+        self._btn_text = f"🎉 Промокод: {self._promo_code} отправлен в телеграм"
+        self._btn_command = self.reset
+        self._draw_button()
+        
+        # Тряска куба при победе
+        self._animate_shake()
 
         if not self._telegram_sent:
             self._telegram_sent = True
-            send_telegram_message(f"Победа! Промокод выдан: {self._promo_code}")
+            # Отправляем сообщение напрямую пользователю
+            if self._telegram_chat_id:
+                send_telegram_message(
+                    f"🏆 <b>Поздравляем с победой!</b>\n\n"
+                    f"🎁 Ваш промокод: <code>{self._promo_code}</code>\n\n"
+                    f"Спасибо за игру! 🎮",
+                    chat_id=str(self._telegram_chat_id)
+                )
 
     def _handle_player_loss(self) -> None:
-        self._set_status_style(self.loss_bg, self.loss_color)
-        self.status_indicator.itemconfig(self._status_dot, fill=self.loss_color)
-        self.status_lbl.configure(text="Не повезло", fg=self.loss_color, bg=self.loss_bg)
-        self.detail_lbl.configure(
-            text="Попробуй ещё раз — удача близко!",
-            fg=self.text_secondary, bg=self.loss_bg,
-        )
-        self.root.after(350, self._show_retry_btn)
+        self._btn_text = "😔 Не повезло — сыграть ещё раз?"
+        self._btn_command = self.reset
+        self._draw_button()
 
         if not self._telegram_sent:
             self._telegram_sent = True
-            send_telegram_message("Проигрыш")
+            # Отправляем сообщение напрямую пользователю
+            if self._telegram_chat_id:
+                send_telegram_message(
+                    f"😔 <b>Не повезло...</b>\n\n"
+                    f"Попробуйте ещё раз — удача обязательно улыбнётся! 🍀",
+                    chat_id=str(self._telegram_chat_id)
+                )
+
+    def _draw_loss_overlay(self) -> None:
+        """Рисует оверлей с предложением сыграть ещё раз при проигрыше."""
+        self.bg_canvas.delete("loss_overlay")
+        
+        # Получаем размеры canvas
+        canvas_width = self.bg_canvas.winfo_width()
+        canvas_height = self.bg_canvas.winfo_height()
+        
+        if canvas_width <= 1:
+            canvas_width = 520
+        if canvas_height <= 1:
+            canvas_height = 820
+        
+        cx = canvas_width // 2
+        cy = canvas_height // 2
+        
+        # Размеры оверлея
+        box_width = 360
+        box_height = 200
+        
+        x1, y1 = cx - box_width // 2, cy - box_height // 2
+        x2, y2 = cx + box_width // 2, cy + box_height // 2
+        
+        # Внешняя тень
+        shadow_offset = 6
+        r = 16
+        self._draw_rounded_rect(
+            x1 + shadow_offset, y1 + shadow_offset,
+            x2 + shadow_offset, y2 + shadow_offset,
+            r, "#000000", "loss_overlay"
+        )
+        
+        # Основной фон (тёмный с красным оттенком)
+        self._draw_rounded_rect(x1, y1, x2, y2, r, "#1F1418", "loss_overlay")
+        
+        # Внутренняя рамка (красное свечение)
+        self._draw_rounded_rect_outline(
+            x1 + 3, y1 + 3, x2 - 3, y2 - 3,
+            r - 2, self.loss_color, 2, "loss_overlay"
+        )
+        
+        # Шрифты
+        try:
+            header_font = tkfont.Font(family="Palatino", size=28, weight="bold")
+            text_font = tkfont.Font(family="Palatino", size=16)
+            btn_font = tkfont.Font(family="Palatino", size=14, weight="bold")
+        except Exception:
+            header_font = tkfont.Font(family="Arial", size=28, weight="bold")
+            text_font = tkfont.Font(family="Arial", size=16)
+            btn_font = tkfont.Font(family="Arial", size=14, weight="bold")
+        
+        # Эмодзи и заголовок
+        self.bg_canvas.create_text(
+            cx, y1 + 50,
+            text="😔 Не повезло...",
+            fill=self.loss_color,
+            font=header_font,
+            anchor="center",
+            tags="loss_overlay"
+        )
+        
+        # Предложение
+        self.bg_canvas.create_text(
+            cx, y1 + 95,
+            text="Попробуйте ещё раз!",
+            fill=self.text_secondary,
+            font=text_font,
+            anchor="center",
+            tags="loss_overlay"
+        )
+        
+        # Кнопка "Сыграть ещё"
+        btn_y = y1 + 155
+        btn_width = 180
+        btn_height = 45
+        
+        self._draw_rounded_rect(
+            cx - btn_width // 2, btn_y - btn_height // 2,
+            cx + btn_width // 2, btn_y + btn_height // 2,
+            10, self.moon_pink, "loss_overlay"
+        )
+        
+        self.bg_canvas.create_text(
+            cx, btn_y,
+            text="🔄 Сыграть ещё",
+            fill="#1A1E2E",
+            font=btn_font,
+            anchor="center",
+            tags=("loss_overlay", "retry_btn")
+        )
+        
+        # Сохраняем границы кнопки
+        self._retry_btn_bounds = (
+            cx - btn_width // 2, btn_y - btn_height // 2,
+            cx + btn_width // 2, btn_y + btn_height // 2
+        )
+        
+        # Привязываем обработчик
+        self.bg_canvas.tag_bind("retry_btn", "<Button-1>", self._on_retry_click)
+        
+        # Поднимаем оверлей наверх
+        self.bg_canvas.tag_raise("loss_overlay")
+
+    def _on_retry_click(self, event) -> None:
+        """Обрабатывает нажатие кнопки 'Сыграть ещё'."""
+        self.bg_canvas.delete("loss_overlay")
+        self.reset()
 
 
 def main() -> None:
