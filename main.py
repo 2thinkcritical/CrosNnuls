@@ -31,7 +31,7 @@ def send_telegram_message(text: str) -> None:
             json={"chat_id": chat_id, "text": text},
             timeout=5,
         ).raise_for_status()
-    except Exception as exc:  # noqa: BLE001 - best-effort уведомление
+    except Exception as exc:
         print(f"[warn] Telegram send failed: {exc}")
 
 
@@ -53,17 +53,11 @@ def get_winning_line(board: list[str]) -> tuple[int, int, int] | None:
 
 
 def best_move_for_o(board: list[str]) -> int:
-    """
-    Лёгкий ИИ — специально ослаблен, чтобы игрок мог выигрывать.
-    """
     empties = [i for i in range(9) if not board[i]]
-    
     if not empties:
         return 0
-    
     if random.random() < 0.30:
         return random.choice(empties)
-    
     for i in empties:
         board[i] = "O"
         if check_winner(board) == "O":
@@ -74,7 +68,6 @@ def best_move_for_o(board: list[str]) -> int:
                     return random.choice(other)
             return i
         board[i] = ""
-    
     for i in empties:
         board[i] = "X"
         if check_winner(board) == "X":
@@ -85,12 +78,11 @@ def best_move_for_o(board: list[str]) -> int:
                     return random.choice(other)
             return i
         board[i] = ""
-    
     return random.choice(empties)
 
 
 def lerp_color(c1: str, c2: str, t: float) -> str:
-    """Линейная интерполяция между двумя цветами."""
+    t = max(0.0, min(1.0, t))
     r1, g1, b1 = int(c1[1:3], 16), int(c1[3:5], 16), int(c1[5:7], 16)
     r2, g2, b2 = int(c2[1:3], 16), int(c2[3:5], 16), int(c2[5:7], 16)
     r = int(r1 + (r2 - r1) * t)
@@ -99,31 +91,31 @@ def lerp_color(c1: str, c2: str, t: float) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    return int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
-
-
-def rgb_to_hex(r: int, g: int, b: int) -> str:
+def darken_color(c: str, factor: float) -> str:
+    r, g, b = int(c[1:3], 16), int(c[3:5], 16), int(c[5:7], 16)
+    r = int(r * factor)
+    g = int(g * factor)
+    b = int(b * factor)
     return f"#{max(0, min(255, r)):02x}{max(0, min(255, g)):02x}{max(0, min(255, b)):02x}"
 
 
 class TicTacToeApp:
-    CELL_SIZE = 120
-    PADDING = 24
-    LINE_WIDTH = 6
-    SYMBOL_PADDING = 28
-    ANIM_STEPS = 18
+    CUBE_SIZE = 300
+    CELL_SIZE = 100
+    LINE_WIDTH = 5
+    SYMBOL_PADDING = 22
+    ANIM_STEPS = 16
     ANIM_DELAY = 12
+    FLIP_STEPS = 30
+    FLIP_DELAY = 16
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("Крестики-нолики")
         
-        # Размеры окна
         win_width = 520
-        win_height = 860
+        win_height = 820
         
-        # Центрируем окно на экране
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
         x = (screen_width - win_width) // 2
@@ -134,62 +126,50 @@ class TicTacToeApp:
         self.root.resizable(True, True)
 
         # ══════════════════════════════════════════════════════════════════
-        # ЭЛЕГАНТНАЯ ПАЛИТРА — dusty rose, rose gold, тёплый крем
-        # Для женской аудитории 25-40: утончённо, премиально, уютно
+        # ЭЛЕГАНТНАЯ ПАЛИТРА для 3D-куба
         # ══════════════════════════════════════════════════════════════════
         
-        # Основные фоны — тёплый крем с розовым оттенком
-        self.bg_main = "#F9F5F2"           # Тёплый кремовый
-        self.bg_gradient_top = "#FDF8F5"   # Светлее сверху
-        self.bg_gradient_bottom = "#F5EBE6" # Теплее снизу
+        self.bg_main = "#F5F0EC"
         
-        # Карточки и поверхности
-        self.bg_card = "#FFFFFF"           # Чистый белый для карточек
-        self.bg_card_shadow = "#E8DDD6"    # Тёплая тень
-        self.bg_cell = "#FBF7F4"           # Очень светлый крем для ячеек
-        self.bg_cell_hover = "#F5EDE7"     # Hover — теплее
+        # Грани куба
+        self.cube_top = "#FFFAF7"          # Верхняя грань (игровое поле)
+        self.cube_right = "#E8DED6"         # Правая грань (тень)
+        self.cube_left = "#F0E6DE"          # Левая грань (полутень)
         
-        # Границы и линии — rose gold
-        self.border_light = "#E8DCD4"      # Светлая граница
-        self.border_accent = "#D4A89A"     # Rose gold граница
-        self.grid_line = "#E5D5CC"         # Сетка — нежный rose gold
+        self.bg_cell = "#FBF7F4"
+        self.bg_cell_hover = "#F5EDE7"
+        self.grid_line = "#DDD0C6"
+        self.border_accent = "#D4A89A"
         
-        # Символ X — глубокий dusty rose
-        self.x_color = "#C67B7B"           # Пыльная роза
-        self.x_glow = "#E8B4B4"            # Свечение X
-        self.x_gradient_light = "#D99A9A"  # Светлый для градиента
+        # Символы
+        self.x_color = "#C67B7B"
+        self.x_glow = "#E8B4B4"
+        self.o_color = "#9B7E9B"
+        self.o_glow = "#C9B3C9"
         
-        # Символ O — благородный mauve/сливовый
-        self.o_color = "#9B7E9B"           # Маув
-        self.o_glow = "#C9B3C9"            # Свечение O
-        self.o_gradient_light = "#B399B3"  # Светлый для градиента
-        
-        # Текст — тёплые тона
-        self.text_primary = "#5D4E4E"      # Тёплый тёмно-коричневый
-        self.text_secondary = "#7A6B6B"    # Приглушённый
-        self.text_muted = "#9A8B8B"        # Очень мягкий
-        self.text_light = "#B8A8A8"        # Для декора
+        # Текст
+        self.text_primary = "#5D4E4E"
+        self.text_secondary = "#7A6B6B"
+        self.text_muted = "#9A8B8B"
+        self.text_light = "#B8A8A8"
         
         # Статусы
-        self.win_color = "#7BAF9B"         # Благородный шалфей для победы
-        self.win_glow = "#A8D4C0"          # Свечение победы
-        self.win_bg = "#EDF7F3"            # Фон победы
+        self.win_color = "#7BAF9B"
+        self.win_glow = "#A8D4C0"
+        self.win_bg = "#EDF7F3"
+        self.loss_color = "#C9A8A8"
+        self.loss_bg = "#FAF3F3"
+        self.draw_color = "#C4A574"
+        self.draw_bg = "#FAF6EF"
         
-        self.loss_color = "#C9A8A8"        # Пепельная роза для проигрыша
-        self.loss_bg = "#FAF3F3"           # Фон проигрыша
-        
-        self.draw_color = "#C4A574"        # Тёплое золото для ничьей
-        self.draw_bg = "#FAF6EF"           # Фон ничьей
-        
-        # Акцентные кнопки — rose gold
-        self.accent = "#C9907E"            # Rose gold основной
-        self.accent_hover = "#B87D6B"      # Rose gold hover
-        self.accent_light = "#E8C4B8"      # Светлый акцент
-        
-        # Вторичные кнопки
-        self.btn_secondary = "#EDE5DF"     # Тёплый светлый
+        # Кнопки
+        self.accent = "#C9907E"
+        self.accent_hover = "#B87D6B"
+        self.accent_light = "#E8C4B8"
+        self.btn_secondary = "#EDE5DF"
         self.btn_secondary_hover = "#E3D8D0"
-        self.btn_text = "#6B5B5B"          # Текст кнопок
+        self.btn_text = "#6B5B5B"
+        self.border_light = "#E8DCD4"
 
         self.root.configure(bg=self.bg_main)
 
@@ -199,55 +179,34 @@ class TicTacToeApp:
         self._promo_code: str | None = None
         self._hover_cell: int | None = None
         self._animation_ids: list[str] = []
-        self._pulse_phase: float = 0.0
-        self._is_pulsing = False
-        self._sparkles: list[dict] = []
+        
+        # 3D параметры
+        self._flip_angle = 0.0
+        self._is_flipping = False
+        self._flip_direction = 1  # 1 = вперёд, -1 = назад
+        self._game_number = 0
 
         self._build_ui()
-        self.reset()
+        self.reset(animate=False)
 
     def _build_ui(self) -> None:
-        # ══════════════════════════════════════════════════════════════════
-        # Декоративный фоновый Canvas для создания глубины
-        # ══════════════════════════════════════════════════════════════════
-        self.bg_canvas = tk.Canvas(
-            self.root, 
-            bg=self.bg_main, 
-            highlightthickness=0
-        )
-        self.bg_canvas.place(x=0, y=0, relwidth=1, relheight=1)
-        
-        # Рисуем декоративные элементы на фоне
-        self._draw_background_decor()
-        
-        # Обработчик изменения размера окна
-        self.root.bind("<Configure>", self._on_window_resize)
-
         # Основной контейнер
         self.container = tk.Frame(self.root, bg=self.bg_main)
-        self.container.place(relx=0.5, rely=0.5, anchor="center")
+        self.container.pack(fill="both", expand=True)
 
         # ══════════════════════════════════════════════════════════════════
-        # Заголовок — элегантный, с декоративным элементом
+        # Заголовок
         # ══════════════════════════════════════════════════════════════════
         self.header_frame = tk.Frame(self.container, bg=self.bg_main)
-        self.header_frame.pack(fill="x", pady=(0, 20))
-
-        # Декоративная линия сверху
-        self.decor_line_top = tk.Canvas(
-            self.header_frame, width=180, height=20, 
-            bg=self.bg_main, highlightthickness=0
-        )
-        self.decor_line_top.pack(pady=(0, 8))
-        self._draw_decorative_line(self.decor_line_top, 180, 10)
+        self.header_frame.pack(fill="x", pady=(20, 10))
 
         try:
-            title_font = tkfont.Font(family="Palatino", size=28, weight="normal")
+            title_font = tkfont.Font(family="Palatino", size=26, weight="normal")
         except Exception:
             try:
-                title_font = tkfont.Font(family="Georgia", size=28, weight="normal")
+                title_font = tkfont.Font(family="Georgia", size=26, weight="normal")
             except Exception:
-                title_font = tkfont.Font(family="Times New Roman", size=28, weight="normal")
+                title_font = tkfont.Font(family="Times New Roman", size=26, weight="normal")
 
         self.title_lbl = tk.Label(
             self.header_frame,
@@ -259,12 +218,12 @@ class TicTacToeApp:
         self.title_lbl.pack()
 
         try:
-            subtitle_font = tkfont.Font(family="Palatino", size=12, slant="italic")
+            subtitle_font = tkfont.Font(family="Palatino", size=11, slant="italic")
         except Exception:
             try:
-                subtitle_font = tkfont.Font(family="Georgia", size=12, slant="italic")
+                subtitle_font = tkfont.Font(family="Georgia", size=11, slant="italic")
             except Exception:
-                subtitle_font = tkfont.Font(family="Times New Roman", size=12, slant="italic")
+                subtitle_font = tkfont.Font(family="Times New Roman", size=11, slant="italic")
 
         self.subtitle_lbl = tk.Label(
             self.header_frame,
@@ -276,519 +235,600 @@ class TicTacToeApp:
         self.subtitle_lbl.pack(pady=(4, 0))
 
         # ══════════════════════════════════════════════════════════════════
-        # Игровое поле — с тенью и изящным обрамлением
+        # 3D Canvas для куба
         # ══════════════════════════════════════════════════════════════════
-        board_size = self.CELL_SIZE * 3 + self.PADDING * 2
+        canvas_width = 460
+        canvas_height = 380
         
-        # Внешний контейнер для тени
-        self.board_outer = tk.Frame(self.container, bg=self.bg_main)
-        self.board_outer.pack(pady=(0, 20))
-        
-        # Canvas для тени
-        shadow_offset = 6
-        self.shadow_canvas = tk.Canvas(
-            self.board_outer,
-            width=board_size + 28 + shadow_offset,
-            height=board_size + 28 + shadow_offset,
+        self.cube_canvas = tk.Canvas(
+            self.container,
+            width=canvas_width,
+            height=canvas_height,
             bg=self.bg_main,
             highlightthickness=0,
         )
-        self.shadow_canvas.pack()
-        
-        # Рисуем мягкую тень
-        for i in range(6):
-            alpha = 0.08 - i * 0.012
-            shadow_color = lerp_color(self.bg_main, self.bg_card_shadow, alpha * 5)
-            self.shadow_canvas.create_rectangle(
-                shadow_offset - i, shadow_offset - i,
-                board_size + 24 + shadow_offset + i, board_size + 24 + shadow_offset + i,
-                fill=shadow_color, outline=""
-            )
-        
-        # Основная карточка поля
-        self.board_frame = tk.Frame(
-            self.shadow_canvas,
-            bg=self.bg_card,
-        )
-        self.shadow_canvas.create_window(
-            12, 12, 
-            window=self.board_frame, 
-            anchor="nw"
-        )
-        
-        # Декоративная рамка
-        self.border_canvas = tk.Canvas(
-            self.board_frame,
-            width=board_size + 4,
-            height=board_size + 4,
-            bg=self.bg_card,
-            highlightthickness=1,
-            highlightbackground=self.border_light,
-        )
-        self.border_canvas.pack(padx=10, pady=10)
+        self.cube_canvas.pack(pady=(10, 10))
 
-        self.canvas = tk.Canvas(
-            self.border_canvas,
-            width=board_size,
-            height=board_size,
-            bg=self.bg_card,
-            highlightthickness=0,
-        )
-        self.border_canvas.create_window(2, 2, window=self.canvas, anchor="nw")
-
-        self.canvas.bind("<Motion>", self._on_mouse_move)
-        self.canvas.bind("<Leave>", self._on_mouse_leave)
-        self.canvas.bind("<Button-1>", self._on_click)
+        self.cube_canvas.bind("<Motion>", self._on_mouse_move)
+        self.cube_canvas.bind("<Leave>", self._on_mouse_leave)
+        self.cube_canvas.bind("<Button-1>", self._on_click)
 
         # ══════════════════════════════════════════════════════════════════
-        # Карточка статуса — элегантная, информативная
+        # Статус-панель
         # ══════════════════════════════════════════════════════════════════
         self.status_outer = tk.Frame(self.container, bg=self.bg_main)
-        self.status_outer.pack(fill="x", pady=(0, 16))
+        self.status_outer.pack(fill="x", pady=(0, 10))
         
         self.status_frame = tk.Frame(
             self.status_outer,
-            bg=self.bg_card,
+            bg="#FFFFFF",
             highlightthickness=1,
             highlightbackground=self.border_light,
         )
-        self.status_frame.pack(fill="x", padx=20)
+        self.status_frame.pack(fill="x", padx=30)
 
-        self.status_inner = tk.Frame(self.status_frame, bg=self.bg_card)
-        self.status_inner.pack(pady=16)
+        self.status_inner = tk.Frame(self.status_frame, bg="#FFFFFF")
+        self.status_inner.pack(pady=14)
 
-        # Иконка хода (декоративная точка)
         self.status_indicator = tk.Canvas(
-            self.status_inner,
-            width=12,
-            height=12,
-            bg=self.bg_card,
-            highlightthickness=0,
+            self.status_inner, width=12, height=12,
+            bg="#FFFFFF", highlightthickness=0,
         )
         self.status_indicator.pack(side="left", padx=(0, 10))
         self._status_dot = self.status_indicator.create_oval(1, 1, 11, 11, fill=self.x_color, outline="")
 
         try:
-            status_font = tkfont.Font(family="Palatino", size=15, weight="bold")
+            status_font = tkfont.Font(family="Palatino", size=14, weight="bold")
         except Exception:
             try:
-                status_font = tkfont.Font(family="Georgia", size=15, weight="bold")
+                status_font = tkfont.Font(family="Georgia", size=14, weight="bold")
             except Exception:
-                status_font = tkfont.Font(family="Times New Roman", size=15, weight="bold")
+                status_font = tkfont.Font(family="Times New Roman", size=14, weight="bold")
 
         self.status_lbl = tk.Label(
-            self.status_inner,
-            text="Твой ход",
-            bg=self.bg_card,
-            fg=self.text_primary,
-            font=status_font,
+            self.status_inner, text="Твой ход",
+            bg="#FFFFFF", fg=self.text_primary, font=status_font,
         )
         self.status_lbl.pack(side="left")
 
-        # Разделитель
         self.separator = tk.Frame(self.status_frame, bg=self.border_light, height=1)
-        self.separator.pack(fill="x", padx=20, pady=(0, 12))
+        self.separator.pack(fill="x", padx=20, pady=(0, 10))
 
         try:
-            detail_font = tkfont.Font(family="Palatino", size=11)
+            detail_font = tkfont.Font(family="Palatino", size=10)
         except Exception:
             try:
-                detail_font = tkfont.Font(family="Georgia", size=11)
+                detail_font = tkfont.Font(family="Georgia", size=10)
             except Exception:
-                detail_font = tkfont.Font(family="Times New Roman", size=11)
+                detail_font = tkfont.Font(family="Times New Roman", size=10)
 
         self.detail_lbl = tk.Label(
             self.status_frame,
             text="Ты играешь за × · Компьютер за ○",
-            bg=self.bg_card,
-            fg=self.text_muted,
-            font=detail_font,
-            wraplength=380,
-            justify="center",
+            bg="#FFFFFF", fg=self.text_muted, font=detail_font,
+            wraplength=350, justify="center",
         )
-        self.detail_lbl.pack(pady=(0, 16))
+        self.detail_lbl.pack(pady=(0, 14))
 
-        # Кнопки действий (скрыты по умолчанию)
-        self.actions = tk.Frame(self.status_frame, bg=self.bg_card)
+        # Кнопки действий
+        self.actions = tk.Frame(self.status_frame, bg="#FFFFFF")
 
         try:
-            btn_font = tkfont.Font(family="Palatino", size=11, weight="bold")
+            btn_font = tkfont.Font(family="Palatino", size=10, weight="bold")
         except Exception:
             try:
-                btn_font = tkfont.Font(family="Georgia", size=11, weight="bold")
+                btn_font = tkfont.Font(family="Georgia", size=10, weight="bold")
             except Exception:
-                btn_font = tkfont.Font(family="Times New Roman", size=11, weight="bold")
+                btn_font = tkfont.Font(family="Times New Roman", size=10, weight="bold")
 
         self.copy_btn = tk.Button(
-            self.actions,
-            text="Скопировать промокод",
-            font=btn_font,
-            fg="#FFFFFF",
-            bg=self.accent,
-            activeforeground="#FFFFFF",
-            activebackground=self.accent_hover,
-            bd=0,
-            relief="flat",
-            cursor="hand2",
-            command=self.copy_promo,
+            self.actions, text="Скопировать промокод", font=btn_font,
+            fg="#FFFFFF", bg=self.accent, activeforeground="#FFFFFF",
+            activebackground=self.accent_hover, bd=0, relief="flat",
+            cursor="hand2", command=self.copy_promo,
         )
         self.copy_btn.bind("<Enter>", lambda e: self.copy_btn.configure(bg=self.accent_hover))
         self.copy_btn.bind("<Leave>", lambda e: self.copy_btn.configure(bg=self.accent))
 
         self.retry_btn = tk.Button(
-            self.actions,
-            text="Сыграть ещё раз",
-            font=btn_font,
-            fg="#FFFFFF",
-            bg=self.accent,
-            activeforeground="#FFFFFF",
-            activebackground=self.accent_hover,
-            bd=0,
-            relief="flat",
-            cursor="hand2",
-            command=self.reset,
+            self.actions, text="Сыграть ещё раз", font=btn_font,
+            fg="#FFFFFF", bg=self.accent, activeforeground="#FFFFFF",
+            activebackground=self.accent_hover, bd=0, relief="flat",
+            cursor="hand2", command=self.reset,
         )
         self.retry_btn.bind("<Enter>", lambda e: self.retry_btn.configure(bg=self.accent_hover))
         self.retry_btn.bind("<Leave>", lambda e: self.retry_btn.configure(bg=self.accent))
 
         # ══════════════════════════════════════════════════════════════════
-        # Кнопка "Новая игра" — вторичный стиль
+        # Кнопка "Новая игра"
         # ══════════════════════════════════════════════════════════════════
         try:
-            restart_font = tkfont.Font(family="Palatino", size=11)
+            restart_font = tkfont.Font(family="Palatino", size=10)
         except Exception:
             try:
-                restart_font = tkfont.Font(family="Georgia", size=11)
+                restart_font = tkfont.Font(family="Georgia", size=10)
             except Exception:
-                restart_font = tkfont.Font(family="Times New Roman", size=11)
+                restart_font = tkfont.Font(family="Times New Roman", size=10)
 
         self.restart_btn = tk.Button(
-            self.container,
-            text="Начать заново",
-            font=restart_font,
-            fg=self.btn_text,
-            bg=self.btn_secondary,
-            activeforeground=self.btn_text,
-            activebackground=self.btn_secondary_hover,
-            bd=0,
-            relief="flat",
-            cursor="hand2",
-            command=self.reset,
+            self.container, text="Начать заново", font=restart_font,
+            fg=self.btn_text, bg=self.btn_secondary,
+            activeforeground=self.btn_text, activebackground=self.btn_secondary_hover,
+            bd=0, relief="flat", cursor="hand2", command=self.reset,
         )
-        self.restart_btn.pack(pady=(0, 20), ipadx=24, ipady=10)
+        self.restart_btn.pack(pady=(5, 15), ipadx=20, ipady=8)
         self.restart_btn.bind("<Enter>", lambda e: self.restart_btn.configure(bg=self.btn_secondary_hover))
         self.restart_btn.bind("<Leave>", lambda e: self.restart_btn.configure(bg=self.btn_secondary))
 
-        # ══════════════════════════════════════════════════════════════════
-        # Футер — минималистичный
-        # ══════════════════════════════════════════════════════════════════
-        # Декоративная линия
-        self.decor_line_bottom = tk.Canvas(
-            self.container, width=120, height=16, 
-            bg=self.bg_main, highlightthickness=0
-        )
-        self.decor_line_bottom.pack(pady=(0, 8))
-        self._draw_decorative_line(self.decor_line_bottom, 120, 8)
-
+        # Футер
         try:
-            footer_font = tkfont.Font(family="Palatino", size=10, slant="italic")
+            footer_font = tkfont.Font(family="Palatino", size=9, slant="italic")
         except Exception:
             try:
-                footer_font = tkfont.Font(family="Georgia", size=10, slant="italic")
+                footer_font = tkfont.Font(family="Georgia", size=9, slant="italic")
             except Exception:
-                footer_font = tkfont.Font(family="Times New Roman", size=10, slant="italic")
+                footer_font = tkfont.Font(family="Times New Roman", size=9, slant="italic")
 
         self.footer = tk.Label(
-            self.container,
-            text="Удачи в игре",
-            bg=self.bg_main,
-            fg=self.text_light,
-            font=footer_font,
+            self.container, text="Удачи в игре",
+            bg=self.bg_main, fg=self.text_light, font=footer_font,
         )
-        self.footer.pack(anchor="center")
+        self.footer.pack(anchor="center", pady=(0, 10))
 
-    def _on_window_resize(self, event: tk.Event) -> None:
-        """Перерисовывает фон при изменении размера окна."""
-        if event.widget == self.root:
-            self._draw_background_decor()
+    # ══════════════════════════════════════════════════════════════════════
+    # 3D КУБА
+    # ══════════════════════════════════════════════════════════════════════
 
-    def _draw_background_decor(self) -> None:
-        """Рисует декоративные элементы на фоне."""
-        self.bg_canvas.delete("bg_decor")
+    def _get_cube_transform(self, angle: float = 0.0) -> dict:
+        """Возвращает параметры трансформации куба."""
+        cx = 230
+        cy = 200
+        size = self.CUBE_SIZE
         
-        # Получаем текущие размеры окна
-        w = self.root.winfo_width()
-        h = self.root.winfo_height()
+        flip_rad = math.radians(angle)
         
-        if w < 10 or h < 10:  # Окно ещё не инициализировано
-            w, h = 520, 860
+        # Угол наклона куба для показа передней грани
+        tilt_x = math.radians(15)  # Небольшой наклон назад
+        tilt_y = math.radians(-20)  # Поворот влево для объёма
         
-        # Мягкий градиент-эффект через круги (масштабируем относительно размера)
-        for i in range(3):
-            x = int(w * 0.1) + i * int(w * 0.35)
-            y = int(h * 0.12) + i * int(h * 0.28)
-            r = 150 + i * 50
-            color = lerp_color(self.bg_main, self.border_light, 0.15)
-            self.bg_canvas.create_oval(
-                x - r, y - r, x + r, y + r,
-                fill=color, outline="", tags="bg_decor"
-            )
+        return {
+            "cx": cx,
+            "cy": cy,
+            "size": size,
+            "tilt_x": tilt_x,
+            "tilt_y": tilt_y,
+            "flip_angle": flip_rad,
+        }
+
+    def _project_point(self, x: float, y: float, z: float, transform: dict) -> tuple[float, float]:
+        """Проецирует 3D точку в 2D."""
+        cx = transform["cx"]
+        cy = transform["cy"]
+        tilt_x = transform["tilt_x"]
+        tilt_y = transform["tilt_y"]
+        flip = transform["flip_angle"]
         
-        # Дополнительные декоративные круги
-        positions = [
-            (int(w * 0.85), int(h * 0.18), 80),
-            (int(w * 0.13), int(h * 0.7), 100),
-            (int(w * 0.92), int(h * 0.82), 120)
+        # Поворот вокруг оси Y (переворот куба при новой игре)
+        x_rot = x * math.cos(flip) + z * math.sin(flip)
+        z_rot = -x * math.sin(flip) + z * math.cos(flip)
+        x, z = x_rot, z_rot
+        
+        # Наклон вокруг оси Y (для объёма)
+        x_rot = x * math.cos(tilt_y) + z * math.sin(tilt_y)
+        z_rot = -x * math.sin(tilt_y) + z * math.cos(tilt_y)
+        x, z = x_rot, z_rot
+        
+        # Наклон вокруг оси X (назад)
+        y_rot = y * math.cos(tilt_x) - z * math.sin(tilt_x)
+        z_rot = y * math.sin(tilt_x) + z * math.cos(tilt_x)
+        y, z = y_rot, z_rot
+        
+        # Простая проекция (без перспективы для чёткости)
+        scale = 0.9
+        px = cx + x * scale
+        py = cy - y * scale  # Y инвертирован в экранных координатах
+        
+        return px, py
+
+    def _draw_cube(self) -> None:
+        """Отрисовка 3D-куба с игровым полем на передней грани."""
+        self.cube_canvas.delete("all")
+        
+        transform = self._get_cube_transform(self._flip_angle)
+        size = transform["size"]
+        half = size / 2
+        
+        # Вершины куба
+        # Передняя грань (z = half): 0-3
+        # Задняя грань (z = -half): 4-7
+        vertices_3d = [
+            (-half, half, half),    # 0: перед-верх-лево
+            (half, half, half),     # 1: перед-верх-право
+            (half, -half, half),    # 2: перед-низ-право
+            (-half, -half, half),   # 3: перед-низ-лево
+            (-half, half, -half),   # 4: зад-верх-лево
+            (half, half, -half),    # 5: зад-верх-право
+            (half, -half, -half),   # 6: зад-низ-право
+            (-half, -half, -half),  # 7: зад-низ-лево
         ]
-        for x, y, r in positions:
-            color = lerp_color(self.bg_main, self.accent_light, 0.08)
-            self.bg_canvas.create_oval(
-                x - r, y - r, x + r, y + r,
-                fill=color, outline="", tags="bg_decor"
+        
+        # Проецируем вершины
+        vertices_2d = [self._project_point(x, y, z, transform) for x, y, z in vertices_3d]
+        
+        # Тень под кубом
+        shadow_offset = 12
+        bottom_verts = [vertices_2d[i] for i in [3, 2, 6, 7]]
+        shadow_verts = []
+        for px, py in bottom_verts:
+            shadow_verts.extend([px + shadow_offset, py + shadow_offset * 0.4])
+        self.cube_canvas.create_polygon(
+            shadow_verts,
+            fill=darken_color(self.bg_main, 0.92),
+            outline="",
+        )
+        
+        # Определяем видимость граней по углу переворота
+        flip_rad = transform["flip_angle"]
+        flip_cos = math.cos(flip_rad)
+        flip_sin = math.sin(flip_rad)
+        
+        # Рисуем грани в порядке от дальних к ближним
+        
+        # Задняя грань (видна при перевороте)
+        if flip_cos < 0:
+            back_face = [vertices_2d[i] for i in [4, 5, 6, 7]]
+            self.cube_canvas.create_polygon(
+                [coord for pt in back_face for coord in pt],
+                fill=self.cube_top,
+                outline=darken_color(self.cube_top, 0.9),
+                width=2,
             )
-
-    def _draw_decorative_line(self, canvas: tk.Canvas, width: int, cy: int) -> None:
-        """Рисует декоративную линию с ромбиком."""
-        mid = width // 2
-        line_len = 50
         
-        # Левая линия
-        canvas.create_line(
-            mid - line_len, cy, mid - 8, cy,
-            fill=self.border_light, width=1
+        # Верхняя грань (непрозрачная, с сеткой)
+        top_face = [vertices_2d[i] for i in [0, 1, 5, 4]]
+        self.cube_canvas.create_polygon(
+            [coord for pt in top_face for coord in pt],
+            fill="#E0D5CC",  # Более насыщенный непрозрачный цвет
+            outline="#C9BDB3",
+            width=1,
         )
-        # Правая линия
-        canvas.create_line(
-            mid + 8, cy, mid + line_len, cy,
-            fill=self.border_light, width=1
-        )
-        # Ромбик в центре
-        canvas.create_polygon(
-            mid, cy - 4, mid + 4, cy, mid, cy + 4, mid - 4, cy,
-            fill=self.border_accent, outline=""
-        )
-
-    def _draw_board(self) -> None:
-        """Отрисовка игрового поля."""
-        self.canvas.delete("all")
-        
-        p = self.PADDING
-        cs = self.CELL_SIZE
-
-        # Фон ячеек
-        for row in range(3):
-            for col in range(3):
-                x1 = p + col * cs + 4
-                y1 = p + row * cs + 4
-                x2 = p + (col + 1) * cs - 4
-                y2 = p + (row + 1) * cs - 4
-                
-                idx = row * 3 + col
-                is_hover = self._hover_cell == idx and not self.board[idx] and not self.game_over
-                fill = self.bg_cell_hover if is_hover else self.bg_cell
-                
-                self._draw_rounded_rect(x1, y1, x2, y2, 8, fill)
-                
-                # Тонкая рамка для hover
-                if is_hover:
-                    self._draw_rounded_rect_outline(x1, y1, x2, y2, 8, self.border_accent)
-
-        # Сетка — тонкие элегантные линии
+        # Сетка на верхней грани
+        top_grid_color = "#C4B8AE"
         for i in range(1, 3):
-            # Вертикальные
-            x = p + i * cs
-            self.canvas.create_line(
-                x, p + 16, x, p + 3 * cs - 16,
-                fill=self.grid_line, width=1
+            t = i / 3
+            p1 = self._project_point(-half + t * size, half, half, transform)
+            p2 = self._project_point(-half + t * size, half, -half, transform)
+            self.cube_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=top_grid_color, width=1)
+            p1 = self._project_point(-half, half, half - t * size, transform)
+            p2 = self._project_point(half, half, half - t * size, transform)
+            self.cube_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=top_grid_color, width=1)
+        
+        # Правая боковая грань (непрозрачная, с сеткой)
+        if flip_sin > -0.7:
+            right_face = [vertices_2d[i] for i in [1, 2, 6, 5]]
+            self.cube_canvas.create_polygon(
+                [coord for pt in right_face for coord in pt],
+                fill="#D5C9BF",  # Более насыщенный непрозрачный цвет
+                outline="#C0B4AA",
+                width=1,
             )
-            # Горизонтальные
-            y = p + i * cs
-            self.canvas.create_line(
-                p + 16, y, p + 3 * cs - 16, y,
-                fill=self.grid_line, width=1
+            # Сетка на правой грани
+            right_grid_color = "#BAA99D"
+            for i in range(1, 3):
+                t = i / 3
+                p1 = self._project_point(half, half - t * size, half, transform)
+                p2 = self._project_point(half, half - t * size, -half, transform)
+                self.cube_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=right_grid_color, width=1)
+                p1 = self._project_point(half, half, half - t * size, transform)
+                p2 = self._project_point(half, -half, half - t * size, transform)
+                self.cube_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=right_grid_color, width=1)
+        
+        
+        # Передняя грань (ИГРОВОЕ ПОЛЕ) — рисуем последней
+        if flip_cos > 0:
+            front_face = [vertices_2d[i] for i in [0, 1, 2, 3]]
+            self.cube_canvas.create_polygon(
+                [coord for pt in front_face for coord in pt],
+                fill=self.cube_top,
+                outline=darken_color(self.cube_top, 0.85),
+                width=2,
             )
+            
+            # Рисуем игровое поле на передней грани
+            self._draw_board_on_face(transform)
 
-        # Символы
+    def _draw_board_on_face(self, transform: dict) -> None:
+        """Рисует игровое поле на передней грани куба."""
+        size = transform["size"]
+        half = size / 2
+        cell = size / 3
+        z_front = half  # Передняя грань
+        
+        # Сетка (на передней грани: X — горизонталь, Y — вертикаль)
+        for i in range(1, 3):
+            # Вертикальные линии (по X)
+            x_offset = -half + i * cell
+            p1 = self._project_point(x_offset, half, z_front, transform)
+            p2 = self._project_point(x_offset, -half, z_front, transform)
+            self.cube_canvas.create_line(
+                p1[0], p1[1], p2[0], p2[1],
+                fill=self.grid_line, width=2,
+            )
+            
+            # Горизонтальные линии (по Y)
+            y_offset = -half + i * cell
+            p1 = self._project_point(-half, y_offset, z_front, transform)
+            p2 = self._project_point(half, y_offset, z_front, transform)
+            self.cube_canvas.create_line(
+                p1[0], p1[1], p2[0], p2[1],
+                fill=self.grid_line, width=2,
+            )
+        
+        # Символы на поле
         for idx, symbol in enumerate(self.board):
+            row, col = divmod(idx, 3)
+            
+            # Центр ячейки в 3D (на передней грани)
+            # row 0 = верх, row 2 = низ → Y от half до -half
+            cx_3d = -half + col * cell + cell / 2
+            cy_3d = half - row * cell - cell / 2  # Инвертируем Y
+            cz_3d = z_front
+            
+            # Hover подсветка
+            if self._hover_cell == idx and not symbol and not self.game_over and not self._is_flipping:
+                self._draw_cell_highlight(cx_3d, cy_3d, cz_3d, cell, transform)
+            
             if symbol:
-                row, col = divmod(idx, 3)
-                cx = p + col * cs + cs // 2
-                cy = p + row * cs + cs // 2
-                
                 if symbol == "X":
-                    self._draw_x(cx, cy, 1.0)
+                    self._draw_x_3d(cx_3d, cy_3d, cz_3d, cell * 0.32, transform)
                 else:
-                    self._draw_o(cx, cy, 1.0)
-
+                    self._draw_o_3d(cx_3d, cy_3d, cz_3d, cell * 0.32, transform)
+        
         # Выигрышная линия
         if self.game_over:
             winning = get_winning_line(self.board)
             if winning:
-                self._draw_winning_line(winning)
+                self._draw_winning_line_3d(winning, transform)
 
-    def _draw_rounded_rect(self, x1: int, y1: int, x2: int, y2: int, r: int, fill: str) -> None:
-        """Рисует прямоугольник с закруглёнными углами."""
-        self.canvas.create_arc(x1, y1, x1 + 2*r, y1 + 2*r, start=90, extent=90, fill=fill, outline="")
-        self.canvas.create_arc(x2 - 2*r, y1, x2, y1 + 2*r, start=0, extent=90, fill=fill, outline="")
-        self.canvas.create_arc(x1, y2 - 2*r, x1 + 2*r, y2, start=180, extent=90, fill=fill, outline="")
-        self.canvas.create_arc(x2 - 2*r, y2 - 2*r, x2, y2, start=270, extent=90, fill=fill, outline="")
-        self.canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline="")
-        self.canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline="")
-
-    def _draw_rounded_rect_outline(self, x1: int, y1: int, x2: int, y2: int, r: int, color: str) -> None:
-        """Рисует контур закруглённого прямоугольника."""
-        self.canvas.create_arc(x1, y1, x1 + 2*r, y1 + 2*r, start=90, extent=90, style="arc", outline=color)
-        self.canvas.create_arc(x2 - 2*r, y1, x2, y1 + 2*r, start=0, extent=90, style="arc", outline=color)
-        self.canvas.create_arc(x1, y2 - 2*r, x1 + 2*r, y2, start=180, extent=90, style="arc", outline=color)
-        self.canvas.create_arc(x2 - 2*r, y2 - 2*r, x2, y2, start=270, extent=90, style="arc", outline=color)
-        self.canvas.create_line(x1 + r, y1, x2 - r, y1, fill=color)
-        self.canvas.create_line(x1 + r, y2, x2 - r, y2, fill=color)
-        self.canvas.create_line(x1, y1 + r, x1, y2 - r, fill=color)
-        self.canvas.create_line(x2, y1 + r, x2, y2 - r, fill=color)
-
-    def _draw_x(self, cx: int, cy: int, progress: float) -> None:
-        """Рисует крестик с мягким градиентным свечением."""
-        sp = self.SYMBOL_PADDING
-        size = (self.CELL_SIZE // 2 - sp) * progress
+    def _draw_cell_highlight(self, cx: float, cy: float, cz: float, cell: float, transform: dict) -> None:
+        """Подсветка ячейки при наведении."""
+        half_cell = cell / 2 * 0.88
+        # На передней грани: X — горизонталь, Y — вертикаль
+        corners = [
+            (cx - half_cell, cy + half_cell, cz),  # верх-лево
+            (cx + half_cell, cy + half_cell, cz),  # верх-право
+            (cx + half_cell, cy - half_cell, cz),  # низ-право
+            (cx - half_cell, cy - half_cell, cz),  # низ-лево
+        ]
+        points = []
+        for x, y, z in corners:
+            px, py = self._project_point(x, y, z, transform)
+            points.extend([px, py])
         
-        # Мягкое многослойное свечение
-        for offset in range(5, 0, -1):
-            glow_alpha = 0.15 - offset * 0.025
-            glow_color = lerp_color(self.bg_cell, self.x_glow, glow_alpha * 2)
-            w = self.LINE_WIDTH + offset * 3
-            self.canvas.create_line(
-                cx - size, cy - size, cx + size, cy + size,
-                fill=glow_color, width=w, capstyle="round",
-            )
-            self.canvas.create_line(
-                cx + size, cy - size, cx - size, cy + size,
-                fill=glow_color, width=w, capstyle="round",
-            )
-        
-        # Основные линии с лёгким градиентом
-        self.canvas.create_line(
-            cx - size, cy - size, cx + size, cy + size,
-            fill=self.x_color, width=self.LINE_WIDTH, capstyle="round",
-        )
-        self.canvas.create_line(
-            cx + size, cy - size, cx - size, cy + size,
-            fill=self.x_color, width=self.LINE_WIDTH, capstyle="round",
+        self.cube_canvas.create_polygon(
+            points,
+            fill=self.bg_cell_hover,
+            outline=self.border_accent,
+            width=2,
         )
 
-    def _draw_o(self, cx: int, cy: int, progress: float) -> None:
-        """Рисует нолик с мягким градиентным свечением."""
-        sp = self.SYMBOL_PADDING
-        radius = (self.CELL_SIZE // 2 - sp) * progress
-        
-        # Мягкое многослойное свечение
-        for offset in range(5, 0, -1):
-            glow_alpha = 0.12 - offset * 0.02
-            glow_color = lerp_color(self.bg_cell, self.o_glow, glow_alpha * 2)
-            w = self.LINE_WIDTH + offset * 3
-            self.canvas.create_oval(
-                cx - radius, cy - radius, cx + radius, cy + radius,
-                outline=glow_color, width=w,
+    def _draw_x_3d(self, cx: float, cy: float, cz: float, size: float, transform: dict) -> None:
+        """Рисует X в 3D на передней грани."""
+        # Свечение
+        for offset in range(3, 0, -1):
+            alpha = 0.15 - offset * 0.04
+            glow_color = lerp_color(self.cube_top, self.x_glow, alpha * 2)
+            s = size * (1 + offset * 0.1)
+            
+            # Диагональ \ (верх-лево → низ-право)
+            p1 = self._project_point(cx - s, cy + s, cz, transform)
+            p2 = self._project_point(cx + s, cy - s, cz, transform)
+            self.cube_canvas.create_line(
+                p1[0], p1[1], p2[0], p2[1],
+                fill=glow_color, width=self.LINE_WIDTH + offset * 2, capstyle="round",
             )
+            
+            # Диагональ / (верх-право → низ-лево)
+            p3 = self._project_point(cx + s, cy + s, cz, transform)
+            p4 = self._project_point(cx - s, cy - s, cz, transform)
+            self.cube_canvas.create_line(
+                p3[0], p3[1], p4[0], p4[1],
+                fill=glow_color, width=self.LINE_WIDTH + offset * 2, capstyle="round",
+            )
+        
+        # Основные линии
+        p1 = self._project_point(cx - size, cy + size, cz, transform)
+        p2 = self._project_point(cx + size, cy - size, cz, transform)
+        self.cube_canvas.create_line(
+            p1[0], p1[1], p2[0], p2[1],
+            fill=self.x_color, width=self.LINE_WIDTH, capstyle="round",
+        )
+        
+        p3 = self._project_point(cx + size, cy + size, cz, transform)
+        p4 = self._project_point(cx - size, cy - size, cz, transform)
+        self.cube_canvas.create_line(
+            p3[0], p3[1], p4[0], p4[1],
+            fill=self.x_color, width=self.LINE_WIDTH, capstyle="round",
+        )
+
+    def _draw_o_3d(self, cx: float, cy: float, cz: float, radius: float, transform: dict) -> None:
+        """Рисует O в 3D (эллипс на наклонной плоскости)."""
+        # Свечение
+        for offset in range(3, 0, -1):
+            alpha = 0.12 - offset * 0.03
+            glow_color = lerp_color(self.cube_top, self.o_glow, alpha * 2)
+            r = radius * (1 + offset * 0.1)
+            self._draw_ellipse_3d(cx, cy, cz, r, transform, glow_color, self.LINE_WIDTH + offset * 2)
         
         # Основной круг
-        self.canvas.create_oval(
-            cx - radius, cy - radius, cx + radius, cy + radius,
-            outline=self.o_color, width=self.LINE_WIDTH,
-        )
+        self._draw_ellipse_3d(cx, cy, cz, radius, transform, self.o_color, self.LINE_WIDTH)
 
-    def _draw_winning_line(self, line: tuple[int, int, int]) -> None:
-        """Рисует линию победы с эффектом свечения."""
-        p = self.PADDING
-        cs = self.CELL_SIZE
+    def _draw_ellipse_3d(self, cx: float, cy: float, cz: float, radius: float, 
+                         transform: dict, color: str, width: int) -> None:
+        """Рисует эллипс в 3D через аппроксимацию точками."""
+        points = []
+        segments = 24
+        for i in range(segments):
+            angle = 2 * math.pi * i / segments
+            x = cx + radius * math.cos(angle)
+            y = cy + radius * math.sin(angle)
+            px, py = self._project_point(x, y, cz, transform)
+            points.extend([px, py])
         
-        def cell_center(idx: int) -> tuple[int, int]:
+        points.extend(points[:2])  # Замыкаем
+        self.cube_canvas.create_line(points, fill=color, width=width, smooth=True)
+
+    def _draw_winning_line_3d(self, line: tuple[int, int, int], transform: dict) -> None:
+        """Рисует линию победы в 3D на передней грани."""
+        size = transform["size"]
+        half = size / 2
+        cell = size / 3
+        z_front = half
+        
+        def cell_center_3d(idx: int) -> tuple[float, float, float]:
             row, col = divmod(idx, 3)
-            return p + col * cs + cs // 2, p + row * cs + cs // 2
+            cx = -half + col * cell + cell / 2
+            cy = half - row * cell - cell / 2  # Инвертируем Y
+            return cx, cy, z_front
         
-        x1, y1 = cell_center(line[0])
-        x2, y2 = cell_center(line[2])
+        start = cell_center_3d(line[0])
+        end = cell_center_3d(line[2])
         
-        # Многослойное свечение
-        for offset in range(8, 0, -1):
-            glow_alpha = 0.25 - offset * 0.028
-            glow_color = lerp_color(self.bg_card, self.win_glow, glow_alpha * 2)
-            self.canvas.create_line(
-                x1, y1, x2, y2,
-                fill=glow_color, width=self.LINE_WIDTH + offset * 4, capstyle="round",
+        # Свечение
+        for offset in range(5, 0, -1):
+            alpha = 0.25 - offset * 0.04
+            glow_color = lerp_color(self.cube_top, self.win_glow, alpha * 2)
+            
+            p1 = self._project_point(*start, transform)
+            p2 = self._project_point(*end, transform)
+            self.cube_canvas.create_line(
+                p1[0], p1[1], p2[0], p2[1],
+                fill=glow_color, width=self.LINE_WIDTH + offset * 3, capstyle="round",
             )
         
         # Основная линия
-        self.canvas.create_line(
-            x1, y1, x2, y2,
+        p1 = self._project_point(*start, transform)
+        p2 = self._project_point(*end, transform)
+        self.cube_canvas.create_line(
+            p1[0], p1[1], p2[0], p2[1],
             fill=self.win_color, width=self.LINE_WIDTH + 2, capstyle="round",
         )
 
-    def _animate_symbol(self, idx: int, symbol: str, step: int = 0) -> None:
-        """Анимация появления символа с плавным easing."""
-        if step > self.ANIM_STEPS:
-            self._draw_board()
+    # ══════════════════════════════════════════════════════════════════════
+    # АНИМАЦИЯ ПЕРЕВОРОТА
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _animate_flip(self, step: int = 0) -> None:
+        """Анимация переворота куба."""
+        if step > self.FLIP_STEPS:
+            self._is_flipping = False
+            self._flip_angle = 0.0
+            self._draw_cube()
             return
         
-        progress = self._ease_out_back(step / self.ANIM_STEPS)
+        # Easing функция для плавности
+        t = step / self.FLIP_STEPS
+        eased = 1 - math.pow(1 - t, 3)  # ease-out cubic
         
-        old_val = self.board[idx]
-        self.board[idx] = ""
-        self._draw_board()
-        self.board[idx] = old_val
+        self._flip_angle = eased * 360 * self._flip_direction
+        self._draw_cube()
         
-        row, col = divmod(idx, 3)
-        p = self.PADDING
-        cs = self.CELL_SIZE
-        cx = p + col * cs + cs // 2
-        cy = p + row * cs + cs // 2
+        anim_id = self.root.after(self.FLIP_DELAY, lambda: self._animate_flip(step + 1))
+        self._animation_ids.append(anim_id)
+
+    def _animate_symbol(self, idx: int, symbol: str, step: int = 0) -> None:
+        """Анимация появления символа."""
+        if step > self.ANIM_STEPS:
+            self._draw_cube()
+            return
         
-        if symbol == "X":
-            self._draw_x(cx, cy, progress)
-        else:
-            self._draw_o(cx, cy, progress)
+        self._draw_cube()
         
         anim_id = self.root.after(self.ANIM_DELAY, lambda: self._animate_symbol(idx, symbol, step + 1))
         self._animation_ids.append(anim_id)
 
-    def _ease_out_back(self, t: float) -> float:
-        """Плавная функция с небольшим overshoot — элегантнее чем elastic."""
-        c1 = 1.70158
-        c3 = c1 + 1
-        return 1 + c3 * pow(t - 1, 3) + c1 * pow(t - 1, 2)
+    # ══════════════════════════════════════════════════════════════════════
+    # ОПРЕДЕЛЕНИЕ ЯЧЕЙКИ ПО КЛИКУ
+    # ══════════════════════════════════════════════════════════════════════
 
-    def _get_cell_at(self, x: int, y: int) -> int | None:
-        """Возвращает индекс ячейки по координатам."""
-        p = self.PADDING
-        cs = self.CELL_SIZE
+    def _get_cell_at(self, mx: int, my: int) -> int | None:
+        """Определяет ячейку по координатам мыши на передней грани."""
+        if self._is_flipping:
+            return None
         
-        col = (x - p) // cs
-        row = (y - p) // cs
+        transform = self._get_cube_transform(0)
+        size = transform["size"]
+        half = size / 2
+        cell = size / 3
+        z_front = half
         
-        if 0 <= row < 3 and 0 <= col < 3:
-            return row * 3 + col
+        # Проверяем каждую ячейку
+        for idx in range(9):
+            row, col = divmod(idx, 3)
+            
+            # Центр ячейки на передней грани
+            cx_3d = -half + col * cell + cell / 2
+            cy_3d = half - row * cell - cell / 2  # row 0 = верх
+            
+            # Углы ячейки
+            half_cell = cell / 2
+            corners_3d = [
+                (cx_3d - half_cell, cy_3d + half_cell, z_front),  # верх-лево
+                (cx_3d + half_cell, cy_3d + half_cell, z_front),  # верх-право
+                (cx_3d + half_cell, cy_3d - half_cell, z_front),  # низ-право
+                (cx_3d - half_cell, cy_3d - half_cell, z_front),  # низ-лево
+            ]
+            
+            # Проецируем углы
+            corners_2d = [self._project_point(x, y, z, transform) for x, y, z in corners_3d]
+            
+            # Проверяем, находится ли точка внутри четырёхугольника
+            if self._point_in_polygon(mx, my, corners_2d):
+                return idx
+        
         return None
 
+    def _point_in_polygon(self, x: float, y: float, polygon: list[tuple[float, float]]) -> bool:
+        """Проверяет, находится ли точка внутри полигона."""
+        n = len(polygon)
+        inside = False
+        
+        j = n - 1
+        for i in range(n):
+            xi, yi = polygon[i]
+            xj, yj = polygon[j]
+            
+            if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
+                inside = not inside
+            j = i
+        
+        return inside
+
+    # ══════════════════════════════════════════════════════════════════════
+    # ОБРАБОТЧИКИ СОБЫТИЙ
+    # ══════════════════════════════════════════════════════════════════════
+
     def _on_mouse_move(self, event: tk.Event) -> None:
-        if self.game_over:
+        if self.game_over or self._is_flipping:
             return
         cell = self._get_cell_at(event.x, event.y)
         if cell != self._hover_cell:
             self._hover_cell = cell
-            self._draw_board()
+            self._draw_cube()
 
     def _on_mouse_leave(self, event: tk.Event) -> None:
         if self._hover_cell is not None:
             self._hover_cell = None
-            self._draw_board()
+            self._draw_cube()
 
     def _on_click(self, event: tk.Event) -> None:
-        if self.game_over:
+        if self.game_over or self._is_flipping:
             return
         cell = self._get_cell_at(event.x, event.y)
         if cell is not None and not self.board[cell]:
             self.on_player_click(cell)
 
-    def reset(self) -> None:
+    def reset(self, animate: bool = True) -> None:
         for anim_id in self._animation_ids:
             self.root.after_cancel(anim_id)
         self._animation_ids.clear()
@@ -798,26 +838,28 @@ class TicTacToeApp:
         self._telegram_sent = False
         self._promo_code = None
         self._hover_cell = None
+        
+        # Анимация переворота
+        if animate and not self._is_flipping:
+            self._is_flipping = True
+            self._game_number += 1
+            self._flip_direction = 1 if self._game_number % 2 == 1 else -1
+            self._animate_flip()
+        else:
+            self._draw_cube()
 
-        self._draw_board()
-
-        # Сброс стилей статус-карточки
-        self.status_frame.configure(
-            bg=self.bg_card,
-            highlightbackground=self.border_light
-        )
-        self.status_inner.configure(bg=self.bg_card)
+        # Сброс UI
+        self.status_frame.configure(bg="#FFFFFF", highlightbackground=self.border_light)
+        self.status_inner.configure(bg="#FFFFFF")
         self.separator.configure(bg=self.border_light)
         
         self.status_indicator.itemconfig(self._status_dot, fill=self.x_color)
-        self.status_indicator.configure(bg=self.bg_card)
-        self.status_lbl.configure(text="Твой ход", fg=self.text_primary, bg=self.bg_card)
+        self.status_indicator.configure(bg="#FFFFFF")
+        self.status_lbl.configure(text="Твой ход", fg=self.text_primary, bg="#FFFFFF")
         self.detail_lbl.configure(
             text="Ты играешь за × · Компьютер за ○",
-            fg=self.text_muted,
-            bg=self.bg_card,
+            fg=self.text_muted, bg="#FFFFFF",
         )
-
         self._hide_promo_btn()
 
     def _hide_promo_btn(self) -> None:
@@ -825,27 +867,23 @@ class TicTacToeApp:
 
     def _show_promo_btn(self) -> None:
         self.retry_btn.pack_forget()
-        self.actions.pack(pady=(0, 16))
-        self.copy_btn.pack(ipadx=20, ipady=10)
+        self.actions.pack(pady=(0, 14))
+        self.copy_btn.pack(ipadx=18, ipady=8)
 
     def _show_retry_btn(self) -> None:
         self.copy_btn.pack_forget()
-        self.actions.pack(pady=(0, 16))
-        self.retry_btn.pack(ipadx=20, ipady=10)
+        self.actions.pack(pady=(0, 14))
+        self.retry_btn.pack(ipadx=18, ipady=8)
 
     def copy_promo(self) -> None:
         if not self._promo_code:
             return
         self.root.clipboard_clear()
         self.root.clipboard_append(self._promo_code)
-        self.detail_lbl.configure(
-            text="Промокод скопирован!", 
-            fg=self.win_color,
-            bg=self.win_bg
-        )
+        self.detail_lbl.configure(text="Промокод скопирован!", fg=self.win_color, bg=self.win_bg)
 
     def on_player_click(self, idx: int) -> None:
-        if self.game_over or self.board[idx]:
+        if self.game_over or self.board[idx] or self._is_flipping:
             return
 
         self._place(idx, "X")
@@ -878,8 +916,7 @@ class TicTacToeApp:
             return
         
         self.game_over = True
-        
-        self.root.after(self.ANIM_STEPS * self.ANIM_DELAY + 50, self._draw_board)
+        self.root.after(self.ANIM_STEPS * self.ANIM_DELAY + 50, self._draw_cube)
         
         if result == "draw":
             self._set_status_style(self.draw_bg, self.draw_color)
@@ -887,8 +924,7 @@ class TicTacToeApp:
             self.status_lbl.configure(text="Ничья", fg=self.draw_color, bg=self.draw_bg)
             self.detail_lbl.configure(
                 text="Отличная партия! Попробуй ещё раз",
-                fg=self.text_secondary,
-                bg=self.draw_bg,
+                fg=self.text_secondary, bg=self.draw_bg,
             )
             self.root.after(350, self._show_retry_btn)
             return
@@ -899,7 +935,6 @@ class TicTacToeApp:
             self._handle_player_loss()
 
     def _set_status_style(self, bg_color: str, accent_color: str) -> None:
-        """Меняет стиль статус-карточки."""
         self.status_frame.configure(bg=bg_color)
         self.status_inner.configure(bg=bg_color)
         self.status_indicator.configure(bg=bg_color)
@@ -916,8 +951,7 @@ class TicTacToeApp:
         self.status_lbl.configure(text="Победа!", fg=self.win_color, bg=self.win_bg)
         self.detail_lbl.configure(
             text=f"Твой промокод: {self._promo_code}",
-            fg=self.text_primary,
-            bg=self.win_bg,
+            fg=self.text_primary, bg=self.win_bg,
         )
         self.root.after(350, self._show_promo_btn)
 
@@ -931,8 +965,7 @@ class TicTacToeApp:
         self.status_lbl.configure(text="Не повезло", fg=self.loss_color, bg=self.loss_bg)
         self.detail_lbl.configure(
             text="Попробуй ещё раз — удача близко!",
-            fg=self.text_secondary,
-            bg=self.loss_bg,
+            fg=self.text_secondary, bg=self.loss_bg,
         )
         self.root.after(350, self._show_retry_btn)
 
