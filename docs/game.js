@@ -12,7 +12,7 @@ const CONFIG = {
   // Пример: 'https://tictactoe-telegram.your-subdomain.workers.dev'
   // Для локального тестирования: 'http://localhost:8081'
   WORKER_URL: 'https://soft-field-1574.2thinkcritical.workers.dev',
-  BOT_USERNAME: '@promo_for_user_bot',  // Username бота без @
+  BOT_USERNAME: 'promo_for_user_bot',  // Username бота без @
 
   // Размеры
   CUBE_SIZE: 300,
