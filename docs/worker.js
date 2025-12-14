@@ -141,6 +141,19 @@ async function handleCheck(url, env, corsHeaders) {
             await fetch(
               `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?offset=${update.update_id + 1}`
             );
+            try {
+              await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  chat_id: chatId,
+                  text: `Готово! Вы успешно привязали аккаунт.\nПерейдите обратно в игру`,
+                  parse_mode: 'HTML',
+                }),
+              });
+            } catch (err) {
+              console.error('Failed to send confirmation message:', err);
+            }
 
             return jsonResponse({ chat_id: chatId }, 200, corsHeaders);
           }
