@@ -107,7 +107,7 @@ async function handleCheck(url, env, corsHeaders) {
     const data = await response.json();
 
     if (!data.ok) {
-      return jsonResponse({ chat_id: null }, 200, corsHeaders);
+      return jsonResponse({ error: `Telegram Error: ${data.description}`, debug: data }, 200, corsHeaders);
     }
 
     // Ищем /start с нужным username
