@@ -191,7 +191,8 @@ function initMusic() {
         updateMusicBtn();
       }).catch(e => {
         console.error('Manual play failed:', e);
-        alert('Не удалось запустить музыку: ' + e.message);
+        // Updated alert to show the error message from the browser's play() promise rejection
+        alert(`Не удалось запустить музыку: ${e.message || 'Неизвестная ошибка'}`);
       });
     } else {
       bgAudio.pause();
@@ -1193,12 +1194,20 @@ async function checkSubscriptionLoop(attempts = 0) {
   try {
     const result = await checkUserSubscribed(state.telegramUsername);
 
-    if (result && result.error === 'username_mismatch') {
-      usernameBtn.textContent = 'Неверный username';
-      usernameBtn.disabled = false;
-      usernameInput.style.borderColor = COLORS.lossColor;
-      alert(`❌ Ошибка!\n\nВы вошли в Telegram как @${result.actual}\nА в игре ввели @${result.expected}\n\nПожалуйста, введите ваш реальный Telegram ник.`);
-      return;
+    if (result && result.error) {
+      if (result.error === 'username_mismatch') {
+        usernameBtn.textContent = 'Неверный username';
+        usernameBtn.disabled = false;
+        usernameInput.style.borderColor = COLORS.lossColor;
+        alert(`❌ Ошибка!\n\nВы вошли в Telegram как @${result.actual}\nА в игре ввели @${result.expected}\n\nПожалуйста, введите ваш реальный Telegram ник.`);
+        return;
+      } else {
+        // Show other errors (e.g. from Worker)
+        alert(`❌ Ошибка Telegram:\n${result.error}\n\n${JSON.stringify(result.debug || {}, null, 2)}`);
+        usernameBtn.textContent = 'Ошибка';
+        usernameBtn.disabled = false;
+        return;
+      }
     }
 
     if (result && result.chat_id) {
