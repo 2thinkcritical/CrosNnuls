@@ -1,0 +1,488 @@
+/* ══════════════════════════════════════════════════════════════════
+   КОСМИЧЕСКАЯ ПАЛИТРА — звёздное небо
+   ══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Фон */
+  --bg-main: #0B0E17;
+  --bg-gradient-top: #0F1423;
+  --bg-gradient-bottom: #1A1E2E;
+
+  /* Грани куба */
+  --cube-top: #1E2438;
+  --cube-right: #151929;
+  --cube-left: #1A1F32;
+
+  /* Ячейки */
+  --bg-cell: #232940;
+  --bg-cell-hover: #2E3650;
+  --grid-line: #3D4565;
+  --border-accent: #6B7AAA;
+
+  /* Символы — неоновые */
+  --x-color: #FF6B9D;
+  --x-glow: #FF8FB3;
+  --o-color: #00D4FF;
+  --o-glow: #66E5FF;
+
+  /* Текст */
+  --text-primary: #E8ECF5;
+  --text-secondary: #B8C0D8;
+  --text-muted: #7A85A8;
+  --text-light: #5A6488;
+
+  /* Статусы */
+  --win-color: #00E5A0;
+  --win-glow: #66F5C8;
+  --win-bg: #0D1A18;
+  --loss-color: #FF6B6B;
+  --loss-bg: #1A0F0F;
+  --draw-color: #FFD166;
+  --draw-bg: #1A1708;
+
+  /* Кнопки */
+  --accent: #7B68EE;
+  --accent-hover: #9580FF;
+  --accent-light: #A899FF;
+  --btn-secondary: #2A3150;
+  --btn-secondary-hover: #363E5E;
+  --btn-text: #E0E4F0;
+  --border-light: #3A4268;
+
+  /* Розовый лунный */
+  --moon-pink: #E8A4C9;
+  --moon-pink-hover: #F0B8D8;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+@font-face {
+  font-family: 'Space';
+  src: local('SF Pro Display'), local('Segoe UI'), local('Roboto');
+}
+
+body {
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, serif;
+  background: var(--bg-main);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   КОНТЕЙНЕР ИГРЫ
+   ══════════════════════════════════════════════════════════════════ */
+
+.game-container {
+  width: 520px;
+  height: 820px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ФОНОВЫЙ CANVAS
+   ══════════════════════════════════════════════════════════════════ */
+
+#bg-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ЗАГОЛОВОК
+   ══════════════════════════════════════════════════════════════════ */
+
+.title {
+  position: relative;
+  z-index: 10;
+  font-size: 20px;
+  font-weight: normal;
+  color: var(--bg-main);
+  background: var(--moon-pink);
+  padding: 15px 30px;
+  border-radius: 25px;
+  margin-top: 30px;
+  letter-spacing: 1px;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(232, 164, 201, 0.3);
+  display: inline-block;
+}
+
+.title .subtitle {
+  display: block;
+  text-align: center;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ИГРОВОЙ CANVAS (КУБ)
+   ══════════════════════════════════════════════════════════════════ */
+
+#game-canvas {
+  position: relative;
+  z-index: 10;
+  margin-top: 40px;
+  cursor: pointer;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   СТАТУС-БАР
+   ══════════════════════════════════════════════════════════════════ */
+
+.status-bar {
+  position: relative;
+  z-index: 10;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.status-text {
+  font-size: 18px;
+  color: var(--text-secondary);
+  min-height: 28px;
+}
+
+.status-text.win {
+  color: var(--win-color);
+  text-shadow: 0 0 15px var(--win-glow);
+  font-size: 48px;
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+.status-text.loss {
+  color: var(--loss-color);
+}
+
+.status-text.draw {
+  color: var(--x-color);
+  text-shadow: 0 0 15px var(--x-glow);
+  font-size: 36px;
+  font-weight: bold;
+  line-height: 1.2;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   КНОПКА
+   ══════════════════════════════════════════════════════════════════ */
+
+.game-btn {
+  position: relative;
+  z-index: 10;
+  margin-top: 10px;
+  padding: 14px 40px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--bg-main);
+  background: var(--moon-pink);
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(232, 164, 201, 0.3);
+}
+
+.game-btn:hover {
+  background: var(--moon-pink-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(232, 164, 201, 0.4);
+}
+
+.game-btn:active {
+  transform: translateY(0);
+}
+
+.game-btn.secondary {
+  background: var(--btn-secondary);
+  color: var(--btn-text);
+  box-shadow: 0 4px 15px rgba(42, 49, 80, 0.5);
+}
+
+.game-btn.secondary:hover {
+  background: var(--btn-secondary-hover);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   КНОПКА МУЗЫКИ
+   ══════════════════════════════════════════════════════════════════ */
+
+.music-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s ease;
+  z-index: 20;
+  backdrop-filter: blur(5px);
+}
+
+.music-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.music-btn.playing {
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(123, 104, 238, 0.4);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ДИАЛОГ ВВОДА НИКА
+   ══════════════════════════════════════════════════════════════════ */
+
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(11, 14, 23, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.dialog-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.dialog-box {
+  background: linear-gradient(135deg, var(--cube-top) 0%, var(--cube-left) 100%);
+  border: 1px solid var(--border-accent);
+  border-radius: 20px;
+  padding: 40px;
+  width: 380px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(123, 104, 238, 0.1);
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.dialog-overlay.visible .dialog-box {
+  transform: scale(1);
+}
+
+.dialog-title {
+  font-size: 22px;
+  color: var(--text-primary);
+  margin-bottom: 15px;
+}
+
+.dialog-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 25px;
+  line-height: 1.5;
+}
+
+.dialog-input {
+  width: 100%;
+  padding: 14px 20px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text-primary);
+  background: var(--bg-cell);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dialog-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(123, 104, 238, 0.3);
+}
+
+.dialog-input::placeholder {
+  color: var(--text-light);
+}
+
+.dialog-btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 14px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--btn-text);
+  background: var(--accent);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dialog-btn:hover {
+  background: var(--accent-hover);
+}
+
+.dialog-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dialog-link {
+  display: block;
+  margin-top: 15px;
+  font-size: 13px;
+  color: var(--accent-light);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.dialog-link:hover {
+  color: var(--text-primary);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   OVERLAY ПРОИГРЫША
+   ══════════════════════════════════════════════════════════════════ */
+
+.loss-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(26, 15, 15, 0.95);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 90;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.loss-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.loss-title {
+  font-size: 48px;
+  color: var(--loss-color);
+  margin-bottom: 20px;
+  text-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
+}
+
+.loss-subtitle {
+  font-size: 18px;
+  color: var(--text-muted);
+  margin-bottom: 40px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ПРОМОКОД
+   ══════════════════════════════════════════════════════════════════ */
+
+.promo-container {
+  position: relative;
+  z-index: 10;
+  margin-top: 20px;
+  padding: 15px 25px;
+  background: var(--win-bg);
+  border: 1px solid var(--win-color);
+  border-radius: 12px;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.promo-container.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.promo-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.promo-code {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--win-color);
+  text-shadow: 0 0 15px var(--win-glow);
+  letter-spacing: 3px;
+  font-family: 'Courier New', monospace;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   АДАПТИВНОСТЬ
+   ══════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 540px) {
+  .game-container {
+    width: 100vw;
+    height: 100vh;
+    padding: 10px;
+  }
+
+  .title {
+    font-size: 22px;
+    margin-top: 20px;
+  }
+
+  #game-canvas {
+    margin-top: 20px;
+  }
+
+  .dialog-box {
+    width: 90%;
+    padding: 30px 25px;
+  }
+}
+
+@media (max-height: 750px) {
+  .title {
+    margin-top: 15px;
+    font-size: 22px;
+  }
+
+  #game-canvas {
+    margin-top: 20px;
+  }
+
+  .status-bar {
+    margin-top: 5px;
+  }
+
+  .game-btn {
+    margin-top: 5px;
+  }
+}

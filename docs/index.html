@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Крестики-нолики</title>
+  <link rel="stylesheet" href="styles.css?v=3">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+</head>
+
+<body>
+  <div class="game-container">
+    <!-- Фоновый canvas для звёздного неба -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Заголовок -->
+    <h1 class="title">Выиграй в крестики-нолики<br><span class="subtitle">и получи промокод</span></h1>
+
+    <!-- Игровой canvas (3D куб) -->
+    <canvas id="game-canvas" width="420" height="380"></canvas>
+
+    <!-- Статус-бар -->
+    <div class="status-bar">
+      <p class="status-text" id="status-text">Ваш ход</p>
+    </div>
+
+    <!-- Кнопка -->
+    <button class="game-btn" id="game-btn">Начать заново</button>
+
+    <!-- Кнопка музыки -->
+    <button class="music-btn" id="music-btn" aria-label="Toggle music">
+      🎵
+    </button>
+  </div>
+
+  <!-- Диалог ввода Telegram ника -->
+  <div class="dialog-overlay" id="username-dialog">
+    <div class="dialog-box">
+      <h2 class="dialog-title">Добро пожаловать!</h2>
+      <p class="dialog-subtitle">
+        Введите ваш Telegram
+      </p>
+      <input type="text" class="dialog-input" id="username-input" placeholder="@username" autocomplete="off">
+      <button class="dialog-btn" id="username-btn">Продолжить</button>
+    </div>
+  </div>
+
+  <script src="game.js?v=8"></script>
+</body>
+
+</html>
