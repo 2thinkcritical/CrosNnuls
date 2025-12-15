@@ -35,19 +35,20 @@
     </button>
   </div>
 
-  <!-- Диалог ввода Telegram ника -->
+  <!-- Диалог старта игры через Telegram (без ввода логина) -->
   <div class="dialog-overlay" id="username-dialog">
     <div class="dialog-box">
       <h2 class="dialog-title">Добро пожаловать!</h2>
       <p class="dialog-subtitle">
-        Введите ваш Telegram
+        Чтобы начать игру и получить промокод, нажмите кнопку ниже.<br><br>
+        Мы откроем Telegram — в открывшемся окне нажмите <b>«Start»</b> у бота, затем вернитесь на эту страницу, и игра
+        запустится автоматически.
       </p>
-      <input type="text" class="dialog-input" id="username-input" placeholder="@username" autocomplete="off">
-      <button class="dialog-btn" id="username-btn">Продолжить</button>
+      <button class="dialog-btn" id="username-btn">Открыть Telegram и начать</button>
     </div>
   </div>
 
-  <script src="game.js?v=8"></script>
+  <script src="game.js?v=9"></script>
 </body>
 
 </html>
