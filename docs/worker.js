@@ -82,7 +82,9 @@ async function handleSend(request, env, corsHeaders) {
 /**
  * GET /check?session=xxx
  * Проверяет, пришёл ли от бота /start <session>
- * Возвращает { chat_id: number | null }
+ * Если пришёл, шлёт пользователю текст "Готово! Теперь вернитесь в игру в браузере 🎮"
+ * и возвращает { chat_id: number }.
+ * Если не нашли — { chat_id: null }.
  */
 async function handleCheck(url, env, corsHeaders) {
   try {
@@ -130,14 +132,34 @@ async function handleCheck(url, env, corsHeaders) {
       if (!payload || payload !== expected) continue;
 
       const chatId = message.chat?.id;
-      if (chatId) {
-        // Подтверждаем обновление, чтобы не зацикливаться
+      if (!chatId) continue;
+
+      // 1) Отправляем пользователю сообщение "вернитесь в игру"
+      try {
+        await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: 'Готово! 🎮 Теперь просто вернитесь в игру в браузере — она продолжится автоматически.',
+          }),
+        });
+      } catch (sendErr) {
+        // Не падаем из-за ошибки отправки, просто лог для отладки
+        console.log('Failed to send return-to-game message:', sendErr);
+      }
+
+      // 2) Подтверждаем обновление, чтобы не зацикливаться
+      try {
         await fetch(
           `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?offset=${update.update_id + 1}`
         );
-
-        return jsonResponse({ chat_id: chatId }, 200, corsHeaders);
+      } catch (offsetErr) {
+        console.log('Failed to advance offset:', offsetErr);
       }
+
+      // 3) Возвращаем chat_id игре
+      return jsonResponse({ chat_id: chatId }, 200, corsHeaders);
     }
 
     // Не нашли нужный /start
