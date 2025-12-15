@@ -1,29 +1,25 @@
 /**
  * Cloudflare Worker для проксирования Telegram API
- * 
+ *
  * Деплой:
  * 1. Зайдите на https://workers.cloudflare.com
  * 2. Создайте новый Worker
  * 3. Вставьте этот код
  * 4. В Settings -> Variables добавьте:
  *    - BOT_TOKEN: ваш токен бота
- *    - ALLOWED_ORIGINS: https://yourusername.github.io (через запятую если несколько)
  * 5. Сохраните и задеплойте
  * 6. Скопируйте URL воркера в game.js -> CONFIG.WORKER_URL
  */
 
-// Эти переменные задаются в настройках Cloudflare Worker
-// BOT_TOKEN - токен вашего Telegram бота
-// ALLOWED_ORIGINS - разрешённые домены (например: https://username.github.io)
+// BOT_TOKEN - токен вашего Telegram бота (123456789:AAAA....)
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const origin = request.headers.get('Origin') || '';
 
-    // CORS headers
+    // Простые CORS-заголовки: разрешаем все Origin
     const corsHeaders = {
-      'Access-Control-Allow-Origin': checkOrigin(origin, env.ALLOWED_ORIGINS) ? origin : '',
+      'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     };
@@ -33,7 +29,7 @@ export default {
       return new Response(null, { headers: corsHeaders });
     }
 
-    // Routes
+    // Маршруты
     if (url.pathname === '/send' && request.method === 'POST') {
       return handleSend(request, env, corsHeaders);
     }
@@ -49,12 +45,6 @@ export default {
   },
 };
 
-function checkOrigin(origin, allowedOrigins) {
-  if (!allowedOrigins) return true; // Если не настроено - разрешаем всё (для разработки)
-  const allowed = allowedOrigins.split(',').map(s => s.trim());
-  return allowed.includes(origin) || allowed.includes('*');
-}
-
 /**
  * POST /send
  * Body: { chat_id: number, text: string }
@@ -66,6 +56,10 @@ async function handleSend(request, env, corsHeaders) {
 
     if (!chat_id || !text) {
       return jsonResponse({ error: 'Missing chat_id or text' }, 400, corsHeaders);
+    }
+
+    if (!env.BOT_TOKEN) {
+      return jsonResponse({ error: 'Missing BOT_TOKEN in environment' }, 500, corsHeaders);
     }
 
     const response = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
@@ -80,7 +74,6 @@ async function handleSend(request, env, corsHeaders) {
 
     const data = await response.json();
     return jsonResponse(data, response.ok ? 200 : 400, corsHeaders);
-
   } catch (e) {
     return jsonResponse({ error: e.message }, 500, corsHeaders);
   }
@@ -93,10 +86,15 @@ async function handleSend(request, env, corsHeaders) {
  */
 async function handleCheck(url, env, corsHeaders) {
   try {
-    const username = url.searchParams.get('username');
+    const usernameRaw = url.searchParams.get('username') || '';
+    const username = usernameRaw.trim();
 
     if (!username) {
       return jsonResponse({ error: 'Missing username' }, 400, corsHeaders);
+    }
+
+    if (!env.BOT_TOKEN) {
+      return jsonResponse({ error: 'Missing BOT_TOKEN in environment' }, 500, corsHeaders);
     }
 
     // Получаем последние обновления
@@ -107,7 +105,14 @@ async function handleCheck(url, env, corsHeaders) {
     const data = await response.json();
 
     if (!data.ok) {
-      return jsonResponse({ error: `Telegram Error: ${data.description}`, debug: data }, 200, corsHeaders);
+      return jsonResponse(
+        {
+          error: `Telegram Error: ${data.description}`,
+          debug: data,
+        },
+        200,
+        corsHeaders
+      );
     }
 
     // Ищем /start с нужным username
@@ -115,54 +120,47 @@ async function handleCheck(url, env, corsHeaders) {
       const message = update.message || {};
       const text = message.text || '';
 
-      if (text.startsWith('/start')) {
-        const parts = text.split(' ');
-        if (parts.length > 1 && parts[1].toLowerCase() === username.toLowerCase()) {
-          // Строгая проверка: ник отправителя должен совпадать с введенным
-          const senderUsername = message.from?.username;
+      if (!text.startsWith('/start')) continue;
 
-          if (!senderUsername || senderUsername.toLowerCase() !== username.toLowerCase()) {
-            // Подтверждаем обновление, чтобы не зацикливаться
-            await fetch(
-              `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?offset=${update.update_id + 1}`
-            );
+      const parts = text.split(' ');
+      const payload = (parts[1] || '').trim().toLowerCase();
+      const expected = username.toLowerCase();
 
-            return jsonResponse({
-              error: 'username_mismatch',
-              expected: username,
-              actual: senderUsername
-            }, 400, corsHeaders);
-          }
+      // Требуем совпадения payload (/start <username>)
+      if (!payload || payload !== expected) continue;
 
-          const chatId = message.chat?.id;
+      // Строгая проверка ника отправителя
+      const senderUsername = (message.from?.username || '').trim().toLowerCase();
+      if (!senderUsername || senderUsername !== expected) {
+        // Подтверждаем обновление, чтобы не зацикливаться
+        await fetch(
+          `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?offset=${update.update_id + 1}`
+        );
 
-          if (chatId) {
-            // Подтверждаем обновление
-            await fetch(
-              `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?offset=${update.update_id + 1}`
-            );
-            try {
-              await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  chat_id: chatId,
-                  text: `Готово! Вы успешно привязали аккаунт.\nПерейдите обратно в игру`,
-                  parse_mode: 'HTML',
-                }),
-              });
-            } catch (err) {
-              console.error('Failed to send confirmation message:', err);
-            }
+        return jsonResponse(
+          {
+            error: 'username_mismatch',
+            expected: username,
+            actual: message.from?.username || null,
+          },
+          400,
+          corsHeaders
+        );
+      }
 
-            return jsonResponse({ chat_id: chatId }, 200, corsHeaders);
-          }
-        }
+      const chatId = message.chat?.id;
+      if (chatId) {
+        // Подтверждаем обновление, чтобы не зацикливаться
+        await fetch(
+          `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?offset=${update.update_id + 1}`
+        );
+
+        return jsonResponse({ chat_id: chatId }, 200, corsHeaders);
       }
     }
 
+    // Не нашли нужный /start
     return jsonResponse({ chat_id: null }, 200, corsHeaders);
-
   } catch (e) {
     return jsonResponse({ error: e.message, chat_id: null }, 500, corsHeaders);
   }
@@ -174,4 +172,3 @@ function jsonResponse(data, status, headers) {
     headers: { ...headers, 'Content-Type': 'application/json' },
   });
 }
-
