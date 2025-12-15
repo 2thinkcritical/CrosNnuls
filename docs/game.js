@@ -81,7 +81,6 @@ const state = {
   gameOver: false,
   hoverCell: null,
   promoCode: null,
-  telegramUsername: '',
   telegramChatId: null,
   gameBlocked: true,
   computerThinking: false,
@@ -97,6 +96,9 @@ const state = {
 
   // Анимация символов
   symbolAnimations: {},
+
+  // Связь с Telegram по session-id
+  telegramSessionId: null,
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -127,7 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
   usernameInput = document.getElementById('username-input');
   usernameBtn = document.getElementById('username-btn');
 
-
   // Загружаем фон
   loadBackground();
 
@@ -147,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') onUsernameSubmit();
   });
 
-  // Показываем диалог ввода ника
+  // Показываем диалог старта
   setTimeout(() => {
     usernameDialog.classList.add('visible');
     usernameInput.focus();
@@ -171,13 +172,12 @@ let bgAudio = null;
 let clickAudio = null;
 
 function initMusic() {
-  // Создаем аудио объекты
   bgAudio = new Audio('music.mp3');
   bgAudio.loop = true;
   bgAudio.volume = 0.5;
 
   clickAudio = new Audio('click.wav');
-  clickAudio.volume = 0.4; // Не громкий звук
+  clickAudio.volume = 0.4;
 
   const btn = document.getElementById('music-btn');
 
@@ -191,7 +191,6 @@ function initMusic() {
         updateMusicBtn();
       }).catch(e => {
         console.error('Manual play failed:', e);
-        // Updated alert to show the error message from the browser's play() promise rejection
         alert(`Не удалось запустить музыку: ${e.message || 'Неизвестная ошибка'}`);
       });
     } else {
@@ -202,7 +201,6 @@ function initMusic() {
     musicInitialized = true;
   });
 
-  // Пытаемся запустить музыку при первом клике по странице
   document.body.addEventListener('click', () => {
     startMusic();
   }, { once: true });
@@ -230,7 +228,6 @@ function startMusic() {
       updateMusicBtn();
     }).catch((e) => {
       console.warn('Autoplay failed:', e);
-      // Если автоплей не сработал, подсветим кнопку музыки
       const btn = document.getElementById('music-btn');
       btn.style.borderColor = '#FF6B6B';
       btn.style.animation = 'pulse 1s infinite';
@@ -240,7 +237,6 @@ function startMusic() {
 
 function updateMusicBtn() {
   const btn = document.getElementById('music-btn');
-  // Убираем индикацию ошибки если была
   btn.style.borderColor = '';
   btn.style.animation = '';
 
@@ -262,7 +258,6 @@ function loadBackground() {
 }
 
 function resizeCanvases() {
-  // Фон на всё окно
   bgCanvas.width = window.innerWidth;
   bgCanvas.height = window.innerHeight;
   drawBackground();
@@ -276,11 +271,9 @@ function drawBackground() {
   const w = bgCanvas.width;
   const h = bgCanvas.height;
 
-  // Заливаем фон тёмным цветом
   bgCtx.fillStyle = COLORS.bgMain;
   bgCtx.fillRect(0, 0, w, h);
 
-  // Фоновое изображение (если загружено)
   if (backgroundImage && backgroundImage.complete) {
     const imgW = backgroundImage.width;
     const imgH = backgroundImage.height;
@@ -289,15 +282,12 @@ function drawBackground() {
 
     let drawW, drawH, drawX, drawY;
 
-    // Contain: вся картинка видна, сохраняя пропорции
     if (canvasRatio > imgRatio) {
-      // Canvas шире - масштабируем по высоте
       drawH = h;
       drawW = h * imgRatio;
       drawX = (w - drawW) / 2;
       drawY = 0;
     } else {
-      // Canvas выше - масштабируем по ширине
       drawW = w;
       drawH = w / imgRatio;
       drawX = 0;
@@ -307,7 +297,6 @@ function drawBackground() {
     bgCtx.drawImage(backgroundImage, drawX, drawY, drawW, drawH);
   }
 }
-
 
 // ══════════════════════════════════════════════════════════════════
 // 3D ТРАНСФОРМАЦИИ
@@ -319,8 +308,8 @@ function getCubeTransform(angle = 0) {
   const size = CONFIG.CUBE_SIZE;
 
   const flipRad = angle * Math.PI / 180;
-  const tiltX = 15 * Math.PI / 180;  // наклон назад
-  const tiltY = -20 * Math.PI / 180; // поворот влево
+  const tiltX = 15 * Math.PI / 180;
+  const tiltY = -20 * Math.PI / 180;
 
   return { cx, cy, size, tiltX, tiltY, flipAngle: flipRad };
 }
@@ -328,25 +317,21 @@ function getCubeTransform(angle = 0) {
 function projectPoint(x, y, z, transform) {
   const { cx, cy, tiltX, tiltY, flipAngle } = transform;
 
-  // Поворот вокруг оси Y (переворот куба)
   let xRot = x * Math.cos(flipAngle) + z * Math.sin(flipAngle);
   let zRot = -x * Math.sin(flipAngle) + z * Math.cos(flipAngle);
   x = xRot;
   z = zRot;
 
-  // Наклон вокруг оси Y
   xRot = x * Math.cos(tiltY) + z * Math.sin(tiltY);
   zRot = -x * Math.sin(tiltY) + z * Math.cos(tiltY);
   x = xRot;
   z = zRot;
 
-  // Наклон вокруг оси X
   const yRot = y * Math.cos(tiltX) - z * Math.sin(tiltX);
   zRot = y * Math.sin(tiltX) + z * Math.cos(tiltX);
   y = yRot;
   z = zRot;
 
-  // Проекция
   const scale = 0.9;
   const px = cx + x * scale;
   const py = cy - y * scale;
@@ -357,19 +342,16 @@ function projectPoint(x, y, z, transform) {
 function transformNormal(nx, ny, nz, transform) {
   const { tiltX, tiltY, flipAngle } = transform;
 
-  // Поворот вокруг Y
   let nxRot = nx * Math.cos(flipAngle) + nz * Math.sin(flipAngle);
   let nzRot = -nx * Math.sin(flipAngle) + nz * Math.cos(flipAngle);
   nx = nxRot;
   nz = nzRot;
 
-  // Наклон Y
   nxRot = nx * Math.cos(tiltY) + nz * Math.sin(tiltY);
   nzRot = -nx * Math.sin(tiltY) + nz * Math.cos(tiltY);
   nx = nxRot;
   nz = nzRot;
 
-  // Наклон X
   const nyRot = ny * Math.cos(tiltX) - nz * Math.sin(tiltX);
   nzRot = ny * Math.sin(tiltX) + nz * Math.cos(tiltX);
   ny = nyRot;
@@ -381,18 +363,15 @@ function transformNormal(nx, ny, nz, transform) {
 function getFaceDepth(cx, cy, cz, transform) {
   const { tiltX, tiltY, flipAngle } = transform;
 
-  // Поворот Y
   let xRot = cx * Math.cos(flipAngle) + cz * Math.sin(flipAngle);
   let zRot = -cx * Math.sin(flipAngle) + cz * Math.cos(flipAngle);
   cx = xRot;
   cz = zRot;
 
-  // Наклон Y
   xRot = cx * Math.cos(tiltY) + cz * Math.sin(tiltY);
   zRot = -cx * Math.sin(tiltY) + cz * Math.cos(tiltY);
   cz = zRot;
 
-  // Наклон X
   zRot = cy * Math.sin(tiltX) + cz * Math.cos(tiltX);
 
   return zRot;
@@ -410,22 +389,19 @@ function drawCube() {
   const size = transform.size;
   const half = size / 2;
 
-  // Вершины куба
   const vertices3D = [
-    [-half, half, half],    // 0: перед-верх-лево
-    [half, half, half],     // 1: перед-верх-право
-    [half, -half, half],    // 2: перед-низ-право
-    [-half, -half, half],   // 3: перед-низ-лево
-    [-half, half, -half],   // 4: зад-верх-лево
-    [half, half, -half],    // 5: зад-верх-право
-    [half, -half, -half],   // 6: зад-низ-право
-    [-half, -half, -half],  // 7: зад-низ-лево
+    [-half, half, half],
+    [half, half, half],
+    [half, -half, half],
+    [-half, -half, half],
+    [-half, half, -half],
+    [half, half, -half],
+    [half, -half, -half],
+    [-half, -half, -half],
   ];
 
-  // Проецируем вершины
   const vertices2D = vertices3D.map(v => projectPoint(v[0], v[1], v[2], transform));
 
-  // Грани куба
   const faces = [
     { indices: [0, 1, 2, 3], normal: [0, 0, 1], center: [0, 0, half], type: 'front' },
     { indices: [5, 4, 7, 6], normal: [0, 0, -1], center: [0, 0, -half], type: 'back' },
@@ -435,20 +411,18 @@ function drawCube() {
     { indices: [0, 3, 7, 4], normal: [-1, 0, 0], center: [-half, 0, 0], type: 'left' },
   ];
 
-  // Определяем видимые грани
   const visibleFaces = [];
   for (const face of faces) {
-    const [nx, ny, nz] = transformNormal(...face.normal, transform);
+    const normalTransformed = transformNormal(face.normal[0], face.normal[1], face.normal[2], transform);
+    const nz = normalTransformed[2];
     if (nz > -0.01) {
-      const depth = getFaceDepth(...face.center, transform);
+      const depth = getFaceDepth(face.center[0], face.center[1], face.center[2], transform);
       visibleFaces.push({ face, depth });
     }
   }
 
-  // Сортируем по глубине
   visibleFaces.sort((a, b) => a.depth - b.depth);
 
-  // Рисуем грани
   for (const { face } of visibleFaces) {
     const points = face.indices.map(i => vertices2D[i]);
 
@@ -551,12 +525,10 @@ function drawBoardOnFace(transform) {
   const cell = size / 3;
   const zFront = half;
 
-  // Сетка
   ctx.strokeStyle = COLORS.gridLine;
   ctx.lineWidth = 2;
 
   for (let i = 1; i < 3; i++) {
-    // Вертикальные линии
     const xOffset = -half + i * cell;
     const p1 = projectPoint(xOffset, half, zFront, transform);
     const p2 = projectPoint(xOffset, -half, zFront, transform);
@@ -565,7 +537,6 @@ function drawBoardOnFace(transform) {
     ctx.lineTo(p2[0], p2[1]);
     ctx.stroke();
 
-    // Горизонтальные линии
     const yOffset = -half + i * cell;
     const p3 = projectPoint(-half, yOffset, zFront, transform);
     const p4 = projectPoint(half, yOffset, zFront, transform);
@@ -575,7 +546,6 @@ function drawBoardOnFace(transform) {
     ctx.stroke();
   }
 
-  // Символы
   for (let idx = 0; idx < 9; idx++) {
     const row = Math.floor(idx / 3);
     const col = idx % 3;
@@ -584,7 +554,6 @@ function drawBoardOnFace(transform) {
     const cy3d = half - row * cell - cell / 2;
     const cz3d = zFront;
 
-    // Hover подсветка
     if (state.hoverCell === idx && !state.board[idx] && !state.gameOver && !state.isFlipping) {
       drawCellHighlight(cx3d, cy3d, cz3d, cell, transform);
     }
@@ -602,7 +571,6 @@ function drawBoardOnFace(transform) {
     }
   }
 
-  // Победная линия
   if (state.gameOver) {
     const winLine = getWinningLine(state.board);
     if (winLine) {
@@ -613,7 +581,7 @@ function drawBoardOnFace(transform) {
 
 function drawCellHighlight(cx, cy, cz, cell, transform) {
   const ctx = gameCtx;
-  const halfCell = cell / 2 * 0.88;
+  const halfCell = (cell / 2) * 0.88;
 
   const corners = [
     [cx - halfCell, cy + halfCell, cz],
@@ -640,7 +608,6 @@ function drawCellHighlight(cx, cy, cz, cell, transform) {
 function drawX3D(cx, cy, cz, size, transform, progress = 1) {
   const ctx = gameCtx;
 
-  // Свечение
   for (let offset = 3; offset > 0; offset--) {
     const alpha = (0.15 - offset * 0.04) * progress;
     const glowColor = lerpColor(COLORS.cubeTop, COLORS.xGlow, alpha * 2);
@@ -666,7 +633,6 @@ function drawX3D(cx, cy, cz, size, transform, progress = 1) {
     ctx.stroke();
   }
 
-  // Основные линии
   const p1 = projectPoint(cx - size, cy + size, cz, transform);
   const p2 = projectPoint(cx + size, cy - size, cz, transform);
   const p3 = projectPoint(cx + size, cy + size, cz, transform);
@@ -692,7 +658,6 @@ function drawX3D(cx, cy, cz, size, transform, progress = 1) {
 function drawO3D(cx, cy, cz, radius, transform, progress = 1) {
   const ctx = gameCtx;
 
-  // Свечение
   for (let offset = 3; offset > 0; offset--) {
     const alpha = (0.12 - offset * 0.03) * progress;
     const glowColor = lerpColor(COLORS.cubeTop, COLORS.oGlow, alpha * 2);
@@ -700,7 +665,6 @@ function drawO3D(cx, cy, cz, radius, transform, progress = 1) {
     drawEllipse3D(cx, cy, cz, r, transform, glowColor, CONFIG.LINE_WIDTH + offset * 2, progress);
   }
 
-  // Основной круг
   drawEllipse3D(cx, cy, cz, radius, transform, COLORS.oColor, CONFIG.LINE_WIDTH, progress);
 }
 
@@ -710,7 +674,7 @@ function drawEllipse3D(cx, cy, cz, radius, transform, color, width, progress = 1
   const points = [];
 
   for (let i = 0; i < segments; i++) {
-    const angle = 2 * Math.PI * i / segments;
+    const angle = (2 * Math.PI * i) / segments;
     const x = cx + radius * Math.cos(angle);
     const y = cy + radius * Math.sin(angle);
     points.push(projectPoint(x, y, cz, transform));
@@ -747,13 +711,12 @@ function drawWinningLine3D(line, transform) {
   const start = cellCenter3D(line[0]);
   const end = cellCenter3D(line[2]);
 
-  // Свечение
   for (let offset = 5; offset > 0; offset--) {
     const alpha = 0.25 - offset * 0.04;
     const glowColor = lerpColor(COLORS.cubeTop, COLORS.winGlow, alpha * 2);
 
-    const p1 = projectPoint(...start, transform);
-    const p2 = projectPoint(...end, transform);
+    const p1 = projectPoint(start[0], start[1], start[2], transform);
+    const p2 = projectPoint(end[0], end[1], end[2], transform);
 
     ctx.lineCap = 'round';
     ctx.strokeStyle = glowColor;
@@ -765,9 +728,8 @@ function drawWinningLine3D(line, transform) {
     ctx.stroke();
   }
 
-  // Основная линия
-  const p1 = projectPoint(...start, transform);
-  const p2 = projectPoint(...end, transform);
+  const p1 = projectPoint(start[0], start[1], start[2], transform);
+  const p2 = projectPoint(end[0], end[1], end[2], transform);
 
   ctx.strokeStyle = COLORS.winColor;
   ctx.lineWidth = CONFIG.LINE_WIDTH + 2;
@@ -783,7 +745,7 @@ function drawWinningLine3D(line, transform) {
 // ══════════════════════════════════════════════════════════════════
 
 function lerpColor(c1, c2, t) {
-  t = Math.max(0, Math.min(1, t));
+  const tClamped = Math.max(0, Math.min(1, t));
   const r1 = parseInt(c1.slice(1, 3), 16);
   const g1 = parseInt(c1.slice(3, 5), 16);
   const b1 = parseInt(c1.slice(5, 7), 16);
@@ -791,9 +753,9 @@ function lerpColor(c1, c2, t) {
   const g2 = parseInt(c2.slice(3, 5), 16);
   const b2 = parseInt(c2.slice(5, 7), 16);
 
-  const r = Math.round(r1 + (r2 - r1) * t);
-  const g = Math.round(g1 + (g2 - g1) * t);
-  const b = Math.round(b1 + (b2 - b1) * t);
+  const r = Math.round(r1 + (r2 - r1) * tClamped);
+  const g = Math.round(g1 + (g2 - g1) * tClamped);
+  const b = Math.round(b1 + (b2 - b1) * tClamped);
 
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
@@ -832,20 +794,17 @@ function getWinningLine(board) {
 }
 
 function bestMoveForO(board) {
-  const empties = board.map((v, i) => v === '' ? i : -1).filter(i => i !== -1);
+  const empties = board.map((v, i) => (v === '' ? i : -1)).filter(i => i !== -1);
   if (empties.length === 0) return 0;
 
-  // 30% случайный ход
   if (Math.random() < 0.30) {
     return empties[Math.floor(Math.random() * empties.length)];
   }
 
-  // Проверяем выигрыш
   for (const i of empties) {
     board[i] = 'O';
     if (checkWinner(board) === 'O') {
       board[i] = '';
-      // 40% шанс пропустить победу
       if (Math.random() < 0.40) {
         const other = empties.filter(j => j !== i);
         if (other.length > 0) {
@@ -857,12 +816,10 @@ function bestMoveForO(board) {
     board[i] = '';
   }
 
-  // Блокируем игрока
   for (const i of empties) {
     board[i] = 'X';
     if (checkWinner(board) === 'X') {
       board[i] = '';
-      // 50% шанс не заблокировать
       if (Math.random() < 0.50) {
         const other = empties.filter(j => j !== i);
         if (other.length > 0) {
@@ -896,7 +853,6 @@ function getCellFromMouse(x, y) {
   const cell = size / 3;
   const zFront = half;
 
-  // Проверяем каждую ячейку
   for (let idx = 0; idx < 9; idx++) {
     const row = Math.floor(idx / 3);
     const col = idx % 3;
@@ -904,7 +860,6 @@ function getCellFromMouse(x, y) {
     const cx3d = -half + col * cell + cell / 2;
     const cy3d = half - row * cell - cell / 2;
 
-    // Углы ячейки
     const corners = [
       [cx3d - cell / 2, cy3d + cell / 2, zFront],
       [cx3d + cell / 2, cy3d + cell / 2, zFront],
@@ -925,10 +880,12 @@ function getCellFromMouse(x, y) {
 function pointInPolygon(x, y, points) {
   let inside = false;
   for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-    const xi = points[i][0], yi = points[i][1];
-    const xj = points[j][0], yj = points[j][1];
+    const xi = points[i][0];
+    const yi = points[i][1];
+    const xj = points[j][0];
+    const yj = points[j][1];
 
-    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+    if (((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)) {
       inside = !inside;
     }
   }
@@ -1012,26 +969,20 @@ function afterMove() {
 function handleWin() {
   state.promoCode = generatePromoCode();
 
-  // Тряска
   animateShake();
 
-  // Статус
   updateStatus('🎉 Победа!', 'win');
 
-  // Кнопка с промокодом
   gameBtn.textContent = `Ваш промокод ${state.promoCode} отправлен в телеграм`;
 
-  // Отправляем в Telegram
   sendTelegramMessage(`🎉 Победа! Ваш промокод: <b>${state.promoCode}</b>`);
 }
 
 function handleLoss() {
   updateStatus('', '');
 
-  // Кнопка с сообщением
   gameBtn.textContent = 'Не повезло - попробуйте еще разок';
 
-  // Отправляем в Telegram
   sendTelegramMessage('😔 Проигрыш. Попробуйте ещё раз!');
 }
 
@@ -1073,7 +1024,7 @@ function animateSymbol(idx) {
   function animate() {
     step++;
     const t = step / CONFIG.ANIM_STEPS;
-    const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    const eased = 1 - Math.pow(1 - t, 3);
 
     state.symbolAnimations[idx].progress = eased;
     drawCube();
@@ -1138,96 +1089,30 @@ function onGameBtnClick() {
   reset();
 }
 
+/**
+ * Вместо ввода логина:
+ * 1. Генерируем sessionId
+ * 2. Открываем бота с /start <sessionId>
+ * 3. Циклом опрашиваем Worker по этому sessionId
+ */
 function onUsernameSubmit() {
   playClickSound();
 
-  // Пробуем запустить музыку
   startMusic();
 
   if (usernameBtn.disabled) return;
-  let username = usernameInput.value.trim();
-  usernameInput.style.borderColor = '';
 
-  // Убираем @
-  if (username.startsWith('@')) {
-    username = username.slice(1);
-  }
+  const sessionId = Math.random().toString(36).slice(2, 12);
+  state.telegramSessionId = sessionId;
 
-  if (!username || username.length < 2) {
-    usernameInput.style.borderColor = COLORS.lossColor;
-    setTimeout(() => {
-      usernameInput.style.borderColor = '';
-    }, 500);
-    return;
-  }
-
-  state.telegramUsername = username;
-
-  // Открываем бота
-  const deepLink = `https://t.me/${CONFIG.BOT_USERNAME}?start=${username}`;
-  window.open(deepLink, '_blank');
-
-  // Показываем ожидание
-  usernameBtn.textContent = 'Проверка...';
+  usernameInput.style.display = 'none';
+  usernameBtn.textContent = 'Откройте Telegram и нажмите Start...';
   usernameBtn.disabled = true;
 
-  // Проверяем подписку
+  const deepLink = `https://t.me/${CONFIG.BOT_USERNAME}?start=${sessionId}`;
+  window.open(deepLink, '_blank');
+
   checkSubscriptionLoop();
-}
-
-async function checkSubscriptionLoop(attempts = 0) {
-  // Если Worker не настроен - сразу запускаем игру
-  if (!CONFIG.WORKER_URL) {
-    console.log('[Telegram] Worker not configured, starting game without verification');
-    startGame();
-    return;
-  }
-
-  if (attempts > 30) {
-    // Timeout - сообщаем об ошибке
-    usernameBtn.textContent = 'Не найдено. Ещё раз?';
-    usernameBtn.disabled = false;
-    usernameInput.style.borderColor = COLORS.lossColor;
-    return;
-  }
-
-  try {
-    const result = await checkUserSubscribed(state.telegramUsername);
-
-    if (result && result.error) {
-      if (result.error === 'username_mismatch') {
-        usernameBtn.textContent = 'Неверный username';
-        usernameBtn.disabled = false;
-        usernameInput.style.borderColor = COLORS.lossColor;
-        alert(`❌ Ошибка!\n\nВы вошли в Telegram как @${result.actual}\nА в игре ввели @${result.expected}\n\nПожалуйста, введите ваш реальный Telegram ник.`);
-        return;
-      } else {
-        // Show other errors (e.g. from Worker)
-        alert(`❌ Ошибка Telegram:\n${result.error}\n\n${JSON.stringify(result.debug || {}, null, 2)}`);
-        usernameBtn.textContent = 'Ошибка';
-        usernameBtn.disabled = false;
-        return;
-      }
-    }
-
-    if (result && result.chat_id) {
-      state.telegramChatId = result.chat_id;
-      startGame();
-      return;
-    }
-  } catch (e) {
-    console.warn('Check subscription error:', e);
-  }
-
-  // Повторяем через 2 секунды
-  setTimeout(() => checkSubscriptionLoop(attempts + 1), 2000);
-}
-
-function startGame() {
-  state.gameBlocked = false;
-  usernameDialog.classList.remove('visible');
-  updateStatus('');
-  reset(false);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1254,14 +1139,16 @@ async function sendTelegramMessage(text) {
   }
 }
 
-async function checkUserSubscribed(username) {
+async function checkUserSubscribed(sessionId) {
   if (!CONFIG.WORKER_URL) {
     console.log('[Telegram] Worker not configured, skip check');
     return null;
   }
 
   try {
-    const response = await fetch(`${CONFIG.WORKER_URL}/check?username=${encodeURIComponent(username)}`);
+    const response = await fetch(
+      `${CONFIG.WORKER_URL}/check?session=${encodeURIComponent(sessionId)}`
+    );
     const data = await response.json();
     return data;
   } catch (e) {
@@ -1270,3 +1157,45 @@ async function checkUserSubscribed(username) {
   }
 }
 
+async function checkSubscriptionLoop(attempts = 0) {
+  if (!CONFIG.WORKER_URL) {
+    console.log('[Telegram] Worker not configured, starting game without verification');
+    startGame();
+    return;
+  }
+
+  if (attempts > 30) {
+    usernameBtn.textContent = 'Не удалось найти чат. Попробовать ещё раз?';
+    usernameBtn.disabled = false;
+    usernameInput.style.borderColor = COLORS.lossColor;
+    return;
+  }
+
+  try {
+    const result = await checkUserSubscribed(state.telegramSessionId);
+
+    if (result && result.error) {
+      alert(`❌ Ошибка Telegram:\n${result.error}\n\n${JSON.stringify(result.debug || {}, null, 2)}`);
+      usernameBtn.textContent = 'Ошибка';
+      usernameBtn.disabled = false;
+      return;
+    }
+
+    if (result && result.chat_id) {
+      state.telegramChatId = result.chat_id;
+      startGame();
+      return;
+    }
+  } catch (e) {
+    console.warn('Check subscription error:', e);
+  }
+
+  setTimeout(() => checkSubscriptionLoop(attempts + 1), 2000);
+}
+
+function startGame() {
+  state.gameBlocked = false;
+  usernameDialog.classList.remove('visible');
+  updateStatus('');
+  reset(false);
+}

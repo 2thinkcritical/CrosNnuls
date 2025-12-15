@@ -80,17 +80,17 @@ async function handleSend(request, env, corsHeaders) {
 }
 
 /**
- * GET /check?username=xxx
- * Проверяет, подписался ли пользователь на бота
+ * GET /check?session=xxx
+ * Проверяет, пришёл ли от бота /start <session>
  * Возвращает { chat_id: number | null }
  */
 async function handleCheck(url, env, corsHeaders) {
   try {
-    const usernameRaw = url.searchParams.get('username') || '';
-    const username = usernameRaw.trim();
+    const sessionRaw = url.searchParams.get('session') || '';
+    const session = sessionRaw.trim();
 
-    if (!username) {
-      return jsonResponse({ error: 'Missing username' }, 400, corsHeaders);
+    if (!session) {
+      return jsonResponse({ error: 'Missing session' }, 400, corsHeaders);
     }
 
     if (!env.BOT_TOKEN) {
@@ -115,7 +115,9 @@ async function handleCheck(url, env, corsHeaders) {
       );
     }
 
-    // Ищем /start с нужным username
+    const expected = session.toLowerCase();
+
+    // Ищем /start <session>
     for (const update of (data.result || []).reverse()) {
       const message = update.message || {};
       const text = message.text || '';
@@ -124,29 +126,8 @@ async function handleCheck(url, env, corsHeaders) {
 
       const parts = text.split(' ');
       const payload = (parts[1] || '').trim().toLowerCase();
-      const expected = username.toLowerCase();
 
-      // Требуем совпадения payload (/start <username>)
       if (!payload || payload !== expected) continue;
-
-      // Строгая проверка ника отправителя
-      const senderUsername = (message.from?.username || '').trim().toLowerCase();
-      if (!senderUsername || senderUsername !== expected) {
-        // Подтверждаем обновление, чтобы не зацикливаться
-        await fetch(
-          `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?offset=${update.update_id + 1}`
-        );
-
-        return jsonResponse(
-          {
-            error: 'username_mismatch',
-            expected: username,
-            actual: message.from?.username || null,
-          },
-          400,
-          corsHeaders
-        );
-      }
 
       const chatId = message.chat?.id;
       if (chatId) {
