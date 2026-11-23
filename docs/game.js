@@ -8,11 +8,9 @@
 // ══════════════════════════════════════════════════════════════════
 
 const CONFIG = {
-  // Cloudflare Worker URL (замените на ваш после деплоя)
-  // Пример: 'https://tictactoe-telegram.your-subdomain.workers.dev'
-  // Для локального тестирования: 'http://localhost:8081'
-  WORKER_URL: 'https://soft-field-1574.2thinkcritical.workers.dev',
-  BOT_USERNAME: 'promo_for_user_bot',  // Username бота без @
+  // Both settings are required to enable the optional Telegram demo.
+  WORKER_URL: window.TICTACTOE_CONFIG?.WORKER_URL || '',
+  BOT_USERNAME: window.TICTACTOE_CONFIG?.BOT_USERNAME || '',
 
   // Размеры
   CUBE_SIZE: 300,
@@ -82,6 +80,7 @@ const state = {
   hoverCell: null,
   promoCode: null,
   telegramChatId: null,
+  telegramReceipt: null,
   gameBlocked: true,
   computerThinking: false,
 
@@ -144,18 +143,27 @@ document.addEventListener('DOMContentLoaded', () => {
   gameBtn.addEventListener('click', onGameBtnClick);
   usernameBtn.addEventListener('click', onUsernameSubmit);
 
-  // Показываем диалог старта
-  setTimeout(() => {
-    usernameDialog.classList.add('visible');
-    usernameBtn.focus();
-  }, 300);
+  if (CONFIG.WORKER_URL && CONFIG.BOT_USERNAME) {
+    setTimeout(() => {
+      usernameDialog.classList.add('visible');
+      usernameBtn.focus();
+    }, 300);
+  } else {
+    startGame();
+  }
+  document.getElementById('demo-btn').addEventListener('click', () => {
+    state.telegramSessionId = null;
+    state.telegramReceipt = null;
+    state.telegramChatId = null;
+    startGame();
+  });
 
   // Музыка
   initMusic();
 
   // Начальная отрисовка
   drawCube();
-  updateStatus('');
+  updateStatus('Your turn');
 });
 
 // ══════════════════════════════════════════════════════════════════
@@ -871,14 +879,6 @@ function bestMoveForO(board) {
   return empties[Math.floor(Math.random() * empties.length)];
 }
 
-function generatePromoCode() {
-  let code = '';
-  for (let i = 0; i < 5; i++) {
-    code += Math.floor(Math.random() * 10);
-  }
-  return code;
-}
-
 // ══════════════════════════════════════════════════════════════════
 // ОБРАБОТЧИКИ СОБЫТИЙ
 // ══════════════════════════════════════════════════════════════════
@@ -965,7 +965,10 @@ function onClick(e) {
     afterMove();
 
     if (!state.gameOver) {
-      setTimeout(computerTurn, 450);
+      const round = state.gameNumber;
+      setTimeout(() => {
+        if (round === state.gameNumber) computerTurn();
+      }, 450);
     }
   }
 }
@@ -989,8 +992,10 @@ function afterMove() {
   if (!result) return;
 
   state.gameOver = true;
+  const round = state.gameNumber;
 
   setTimeout(() => {
+    if (round !== state.gameNumber) return;
     drawCube();
 
     if (result === 'draw') {
@@ -1003,52 +1008,54 @@ function afterMove() {
   }, CONFIG.ANIM_STEPS * CONFIG.ANIM_DELAY + 50);
 }
 
-function handleWin() {
-  state.promoCode = generatePromoCode();
-
-  // Тряска
+async function handleWin() {
+  state.promoCode = 'DEMO-WIN';
   animateShake();
-
-  // Статус
-  updateStatus('🎉 Победа!', 'win');
-
-  // Кнопка с промокодом
-  gameBtn.textContent = `Ваш промокод ${state.promoCode} отправлен в телеграм`;
-
-  // Отправляем в Telegram
-  sendTelegramMessage(`🎉 Победа! Ваш промокод: <b>${state.promoCode}</b>`);
+  updateStatus('You win!', 'win');
+  gameBtn.textContent = 'Demo code: DEMO-WIN · Play again';
+  if (state.telegramReceipt) {
+    const round = state.gameNumber;
+    const sent = await sendTelegramMessage('win');
+    if (state.gameNumber === round) {
+      gameBtn.textContent = sent
+        ? 'Demo code sent to Telegram · Play again'
+        : 'Telegram could not send the demo code · Play again';
+    }
+  }
 }
 
 function handleLoss() {
-  updateStatus('', '');
-
-  // Кнопка с сообщением
-  gameBtn.textContent = 'Не повезло - попробуйте еще разок';
-
-  // Отправляем в Telegram
-  sendTelegramMessage('😔 Проигрыш. Попробуйте ещё раз!');
+  updateStatus('Computer wins', 'loss');
+  gameBtn.textContent = 'Try again';
+  void sendTelegramMessage('loss');
 }
 
 function handleDraw() {
-  updateStatus('Ничья!', 'draw');
-  gameBtn.textContent = 'Начать заново';
+  updateStatus('Draw!', 'draw');
+  gameBtn.textContent = 'Play again';
 }
 
 function reset(animate = true) {
+  state.gameNumber++;
   state.board = Array(9).fill('');
   state.gameOver = false;
   state.promoCode = null;
   state.hoverCell = null;
   state.computerThinking = false;
   state.symbolAnimations = {};
+  state.isShaking = false;
+  state.shakeOffsetX = 0;
+  state.shakeOffsetY = 0;
+  state.flipAngle = 0;
+  state.isFlipping = false;
 
   statusText.className = 'status-text';
-  updateStatus('');
-  gameBtn.textContent = 'Начать заново';
+  updateStatus('Your turn');
+  gameBtn.textContent = 'Play again';
 
   if (animate) {
     state.isFlipping = true;
-    state.gameNumber++;
+
     state.flipDirection = state.gameNumber % 2 === 1 ? 1 : -1;
     animateFlip();
   } else {
@@ -1064,7 +1071,9 @@ function animateSymbol(idx) {
   state.symbolAnimations[idx] = { progress: 0 };
 
   let step = 0;
+  const round = state.gameNumber;
   function animate() {
+    if (round !== state.gameNumber || !state.symbolAnimations[idx]) return;
     step++;
     const t = step / CONFIG.ANIM_STEPS;
     const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
@@ -1080,7 +1089,8 @@ function animateSymbol(idx) {
   animate();
 }
 
-function animateFlip(step = 0) {
+function animateFlip(step = 0, round = state.gameNumber) {
+  if (round !== state.gameNumber) return;
   if (step > CONFIG.FLIP_STEPS) {
     state.isFlipping = false;
     state.flipAngle = 0;
@@ -1094,10 +1104,11 @@ function animateFlip(step = 0) {
   state.flipAngle = eased * 360 * state.flipDirection;
   drawCube();
 
-  setTimeout(() => animateFlip(step + 1), CONFIG.FLIP_DELAY);
+  setTimeout(() => animateFlip(step + 1, round), CONFIG.FLIP_DELAY);
 }
 
-function animateShake(step = 0, totalSteps = 20) {
+function animateShake(step = 0, totalSteps = 20, round = state.gameNumber) {
+  if (round !== state.gameNumber) return;
   if (step >= totalSteps) {
     state.isShaking = false;
     state.shakeOffsetX = 0;
@@ -1115,7 +1126,7 @@ function animateShake(step = 0, totalSteps = 20) {
 
   drawCube();
 
-  setTimeout(() => animateShake(step + 1, totalSteps), 30);
+  setTimeout(() => animateShake(step + 1, totalSteps, round), 30);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1147,15 +1158,15 @@ function onUsernameSubmit() {
   if (usernameBtn.disabled) return;
 
   // Генерируем уникальный sessionId для связи с Telegram
-  const sessionId = Math.random().toString(36).slice(2, 12);
+  const sessionId = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
   state.telegramSessionId = sessionId;
 
-  usernameBtn.textContent = 'Откройте Telegram, нажмите «Start» и вернитесь в игру...';
+  usernameBtn.textContent = 'Open Telegram, press Start, then return here…';
   usernameBtn.disabled = true;
 
   // Открываем бота c /start <sessionId>
   const deepLink = `https://t.me/${CONFIG.BOT_USERNAME}?start=${sessionId}`;
-  window.open(deepLink, '_blank');
+  window.open(deepLink, '_blank', 'noopener,noreferrer');
 
   // Запускаем цикл проверки
   checkSubscriptionLoop();
@@ -1165,23 +1176,20 @@ function onUsernameSubmit() {
 // TELEGRAM API (через Cloudflare Worker)
 // ══════════════════════════════════════════════════════════════════
 
-async function sendTelegramMessage(text) {
-  if (!CONFIG.WORKER_URL || !state.telegramChatId) {
-    console.log('[Telegram] Skip message (no worker or chat ID):', text);
-    return;
-  }
-
+async function sendTelegramMessage(result) {
+  if (!CONFIG.WORKER_URL || !state.telegramReceipt) return false;
   try {
-    await fetch(`${CONFIG.WORKER_URL}/send`, {
+    const response = await fetch(`${CONFIG.WORKER_URL}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: state.telegramChatId,
-        text: text,
-      }),
+      body: JSON.stringify({ receipt: state.telegramReceipt, result }),
+      signal: AbortSignal.timeout(10000),
     });
-  } catch (e) {
-    console.warn('[Telegram] Send failed:', e);
+    const data = await response.json();
+    return response.ok && data.ok === true;
+  } catch {
+    console.warn('[Telegram] Could not deliver game result');
+    return false;
   }
 }
 
@@ -1192,7 +1200,7 @@ async function checkUserSubscribed(sessionId) {
   }
 
   try {
-    const response = await fetch(`${CONFIG.WORKER_URL}/check?session=${encodeURIComponent(sessionId)}`);
+    const response = await fetch(`${CONFIG.WORKER_URL}/check?session=${encodeURIComponent(sessionId)}`, { signal: AbortSignal.timeout(10000) });
     const data = await response.json();
     return data;
   } catch (e) {
@@ -1201,7 +1209,8 @@ async function checkUserSubscribed(sessionId) {
   }
 }
 
-async function checkSubscriptionLoop(attempts = 0) {
+async function checkSubscriptionLoop(attempts = 0, sessionId = state.telegramSessionId) {
+  if (!state.gameBlocked || sessionId !== state.telegramSessionId) return;
   // Если Worker не настроен - сразу запускаем игру
   if (!CONFIG.WORKER_URL) {
     console.log('[Telegram] Worker not configured, starting game without verification');
@@ -1211,24 +1220,26 @@ async function checkSubscriptionLoop(attempts = 0) {
 
   if (attempts > 30) {
     // Timeout - сообщаем об ошибке
-    usernameBtn.textContent = 'Не удалось найти чат. Попробовать ещё раз?';
+    usernameBtn.textContent = 'Connection timed out. Try again?';
     usernameBtn.disabled = false;
     return;
   }
 
   try {
-    const result = await checkUserSubscribed(state.telegramSessionId);
+    const result = await checkUserSubscribed(sessionId);
+
+    if (!state.gameBlocked || sessionId !== state.telegramSessionId) return;
 
     if (result && result.error) {
       // Ошибки от Worker (например, Telegram Error)
-      alert(`❌ Ошибка Telegram:\n${result.error}\n\n${JSON.stringify(result.debug || {}, null, 2)}`);
-      usernameBtn.textContent = 'Ошибка, попробовать ещё раз';
+      usernameBtn.textContent = 'Telegram unavailable. Try again or play the demo.';
       usernameBtn.disabled = false;
       return;
     }
 
-    if (result && result.chat_id) {
+    if (result && result.chat_id && result.receipt) {
       state.telegramChatId = result.chat_id;
+      state.telegramReceipt = result.receipt;
       startGame();
       return;
     }
@@ -1237,7 +1248,7 @@ async function checkSubscriptionLoop(attempts = 0) {
   }
 
   // Повторяем через 2 секунды
-  setTimeout(() => checkSubscriptionLoop(attempts + 1), 2000);
+  setTimeout(() => checkSubscriptionLoop(attempts + 1, sessionId), 2000);
 }
 
 function startGame() {

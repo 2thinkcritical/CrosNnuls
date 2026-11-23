@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Крестики-нолики</title>
+  <title>Tic-Tac-Toe · Canvas Game</title>
+  <meta name="description" content="Play a space-themed Tic-Tac-Toe game with a rotating Canvas cube and a deliberately fallible computer opponent.">
   <link rel="stylesheet" href="styles.css?v=3">
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
@@ -13,21 +14,21 @@
 <body>
   <div class="game-container">
     <!-- Фоновый canvas для звёздного неба -->
-    <canvas id="bg-canvas"></canvas>
+    <canvas id="bg-canvas" aria-hidden="true"></canvas>
 
     <!-- Заголовок -->
-    <h1 class="title">Выиграй в крестики-нолики<br><span class="subtitle">и получи промокод</span></h1>
+    <h1 class="title">Tic-Tac-Toe<br><span class="subtitle">A small game in a big universe</span></h1>
 
     <!-- Игровой canvas (3D куб) -->
-    <canvas id="game-canvas" width="420" height="380"></canvas>
+    <canvas id="game-canvas" width="420" height="380" aria-label="Tic-Tac-Toe board. Click an empty square to play X.">Your browser needs Canvas support to play.</canvas>
 
     <!-- Статус-бар -->
     <div class="status-bar">
-      <p class="status-text" id="status-text">Ваш ход</p>
+      <p class="status-text" id="status-text" role="status" aria-live="polite">Your turn</p>
     </div>
 
     <!-- Кнопка -->
-    <button class="game-btn" id="game-btn">Начать заново</button>
+    <button class="game-btn" id="game-btn">Play again</button>
 
     <!-- Кнопка музыки -->
     <button class="music-btn" id="music-btn" aria-label="Toggle music">
@@ -38,17 +39,18 @@
   <!-- Диалог старта игры через Telegram (без ввода логина) -->
   <div class="dialog-overlay" id="username-dialog">
     <div class="dialog-box">
-      <h2 class="dialog-title">Добро пожаловать!</h2>
+      <h2 class="dialog-title">Play with Telegram</h2>
       <p class="dialog-subtitle">
-        Чтобы начать игру и получить промокод, нажмите кнопку ниже.<br><br>
-        Мы откроем Telegram — в открывшемся окне нажмите <b>«Start»</b> у бота, затем вернитесь на эту страницу, и игра
-        запустится автоматически.
+        Optional: connect a private chat to receive demo game results.<br><br>
+        Press Start in the bot, then return here. Demo codes have no monetary value.
       </p>
-      <button class="dialog-btn" id="username-btn">Открыть Telegram и начать</button>
+      <button class="dialog-btn" id="username-btn">Connect Telegram</button>
+      <button class="dialog-btn" id="demo-btn">Play without Telegram</button>
     </div>
   </div>
 
-  <script src="game.js?v=10"></script>
+  <script src="config.js"></script>
+  <script src="game.js"></script>
 </body>
 
 </html>

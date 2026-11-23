@@ -1,177 +1,105 @@
-/**
- * Cloudflare Worker для проксирования Telegram API
- *
- * Деплой:
- * 1. Зайдите на https://workers.cloudflare.com
- * 2. Создайте новый Worker
- * 3. Вставьте этот код
- * 4. В Settings -> Variables добавьте:
- *    - BOT_TOKEN: ваш токен бота
- * 5. Сохраните и задеплойте
- * 6. Скопируйте URL воркера в game.js -> CONFIG.WORKER_URL
- */
-
-// BOT_TOKEN - токен вашего Telegram бота (123456789:AAAA....)
+/** Optional Telegram adapter. Credentials belong in Worker secrets, never in the frontend. */
+const SESSION_PATTERN = /^[a-f0-9]{32}$/;
+const RECEIPT_TTL_SECONDS = 600;
+const MESSAGES = Object.freeze({
+  win: 'You won Tic-Tac-Toe! Demo code: DEMO-WIN (no monetary value).',
+  loss: 'The computer won Tic-Tac-Toe. Try another round!',
+});
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-
-    // Простые CORS-заголовки: разрешаем все Origin
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
+    const origin = request.headers.get('Origin');
+    const allowed = (env.ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean);
+    if (!origin || !allowed.includes(origin)) {
+      return json({ error: 'Origin is not allowed' }, 403);
+    }
+    const headers = {
+      'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
+      Vary: 'Origin',
     };
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+    const url = new URL(request.url);
+    const check = url.pathname === '/check' && request.method === 'GET';
+    const send = url.pathname === '/send' && request.method === 'POST';
+    if (!check && !send) return json({ error: 'Not found' }, 404, headers);
+    if (!env.BOT_TOKEN) return json({ error: 'Telegram integration is not configured' }, 503, headers);
 
-    // Preflight
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
+    try {
+      if (check) {
+        const session = url.searchParams.get('session') || '';
+        if (!SESSION_PATTERN.test(session)) return json({ error: 'Invalid session' }, 400, headers);
+        const data = await telegram(env, 'getUpdates', { timeout: 0, allowed_updates: ['message'], limit: 100 });
+        for (const update of [...(data.result || [])].reverse()) {
+          const message = update.message;
+          if (message?.chat?.type !== 'private' || !Number.isSafeInteger(message.chat.id)) continue;
+          if (message.text !== `/start ${session}`) continue;
+          const receipt = await signReceipt(env.BOT_TOKEN, {
+            chat_id: message.chat.id,
+            session,
+            expires: Math.floor(Date.now() / 1000) + RECEIPT_TTL_SECONDS,
+          });
+          return json({ chat_id: message.chat.id, receipt }, 200, headers);
+        }
+        return json({ chat_id: null }, 200, headers);
+      }
+
+      let body;
+      try { body = await request.json(); }
+      catch { return json({ error: 'Invalid JSON' }, 400, headers); }
+      if (!body || typeof body !== 'object') return json({ error: 'Invalid request' }, 400, headers);
+      const identity = await verifyReceipt(env.BOT_TOKEN, body.receipt);
+      if (!identity) return json({ error: 'A valid Telegram session is required' }, 401, headers);
+      if (typeof body.result !== 'string' || !Object.hasOwn(MESSAGES, body.result)) return json({ error: 'Invalid game result' }, 400, headers);
+      await telegram(env, 'sendMessage', { chat_id: identity.chat_id, text: MESSAGES[body.result] });
+      return json({ ok: true }, 200, headers);
+    } catch {
+      // Do not return upstream exceptions: request URLs contain the bot credential.
+      return json({ error: 'Telegram is temporarily unavailable' }, 502, headers);
     }
-
-    // Маршруты
-    if (url.pathname === '/send' && request.method === 'POST') {
-      return handleSend(request, env, corsHeaders);
-    }
-
-    if (url.pathname === '/check' && request.method === 'GET') {
-      return handleCheck(url, env, corsHeaders);
-    }
-
-    return new Response(JSON.stringify({ error: 'Not found' }), {
-      status: 404,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
   },
 };
 
-/**
- * POST /send
- * Body: { chat_id: number, text: string }
- * Отправляет сообщение в Telegram
- */
-async function handleSend(request, env, corsHeaders) {
-  try {
-    const { chat_id, text } = await request.json();
-
-    if (!chat_id || !text) {
-      return jsonResponse({ error: 'Missing chat_id or text' }, 400, corsHeaders);
-    }
-
-    if (!env.BOT_TOKEN) {
-      return jsonResponse({ error: 'Missing BOT_TOKEN in environment' }, 500, corsHeaders);
-    }
-
-    const response = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id,
-        text,
-        parse_mode: 'HTML',
-      }),
-    });
-
-    const data = await response.json();
-    return jsonResponse(data, response.ok ? 200 : 400, corsHeaders);
-  } catch (e) {
-    return jsonResponse({ error: e.message }, 500, corsHeaders);
-  }
+async function telegram(env, method, body) {
+  const response = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8000),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error('Telegram request failed');
+  return data;
 }
 
-/**
- * GET /check?session=xxx
- * Проверяет, пришёл ли от бота /start <session>
- * Если пришёл, шлёт пользователю текст "Готово! Теперь вернитесь в игру в браузере 🎮"
- * и возвращает { chat_id: number }.
- * Если не нашли — { chat_id: null }.
- */
-async function handleCheck(url, env, corsHeaders) {
-  try {
-    const sessionRaw = url.searchParams.get('session') || '';
-    const session = sessionRaw.trim();
-
-    if (!session) {
-      return jsonResponse({ error: 'Missing session' }, 400, corsHeaders);
-    }
-
-    if (!env.BOT_TOKEN) {
-      return jsonResponse({ error: 'Missing BOT_TOKEN in environment' }, 500, corsHeaders);
-    }
-
-    // Получаем последние обновления
-    const response = await fetch(
-      `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?timeout=1&allowed_updates=["message"]`
-    );
-
-    const data = await response.json();
-
-    if (!data.ok) {
-      return jsonResponse(
-        {
-          error: `Telegram Error: ${data.description}`,
-          debug: data,
-        },
-        200,
-        corsHeaders
-      );
-    }
-
-    const expected = session.toLowerCase();
-
-    // Ищем /start <session>
-    for (const update of (data.result || []).reverse()) {
-      const message = update.message || {};
-      const text = message.text || '';
-
-      if (!text.startsWith('/start')) continue;
-
-      const parts = text.split(' ');
-      const payload = (parts[1] || '').trim().toLowerCase();
-
-      if (!payload || payload !== expected) continue;
-
-      const chatId = message.chat?.id;
-      if (!chatId) continue;
-
-      // 1) Отправляем пользователю сообщение "вернитесь в игру"
-      try {
-        await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: 'Готово! 🎮 Теперь просто вернитесь в игру в браузере — она продолжится автоматически.',
-          }),
-        });
-      } catch (sendErr) {
-        // Не падаем из-за ошибки отправки, просто лог для отладки
-        console.log('Failed to send return-to-game message:', sendErr);
-      }
-
-      // 2) Подтверждаем обновление, чтобы не зацикливаться
-      try {
-        await fetch(
-          `https://api.telegram.org/bot${env.BOT_TOKEN}/getUpdates?offset=${update.update_id + 1}`
-        );
-      } catch (offsetErr) {
-        console.log('Failed to advance offset:', offsetErr);
-      }
-
-      // 3) Возвращаем chat_id игре
-      return jsonResponse({ chat_id: chatId }, 200, corsHeaders);
-    }
-
-    // Не нашли нужный /start
-    return jsonResponse({ chat_id: null }, 200, corsHeaders);
-  } catch (e) {
-    return jsonResponse({ error: e.message, chat_id: null }, 500, corsHeaders);
-  }
+async function receiptKey(secret) {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
-function jsonResponse(data, status, headers) {
+async function signReceipt(secret, identity) {
+  const payload = btoa(JSON.stringify(identity));
+  const signature = await crypto.subtle.sign('HMAC', await receiptKey(secret), new TextEncoder().encode(payload));
+  return `${payload}.${Array.from(new Uint8Array(signature), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function verifyReceipt(secret, receipt) {
+  if (typeof receipt !== 'string' || receipt.length > 1024) return null;
+  const [payload, signature, extra] = receipt.split('.');
+  if (extra !== undefined || !payload || !/^[a-f0-9]{64}$/.test(signature || '')) return null;
+  const bytes = Uint8Array.from(signature.match(/../g), value => Number.parseInt(value, 16));
+  if (!await crypto.subtle.verify('HMAC', await receiptKey(secret), bytes, new TextEncoder().encode(payload))) return null;
+  try {
+    const identity = JSON.parse(atob(payload));
+    if (!Number.isSafeInteger(identity.chat_id) || !SESSION_PATTERN.test(identity.session) ||
+        !Number.isSafeInteger(identity.expires) || identity.expires <= Math.floor(Date.now() / 1000)) return null;
+    return identity;
+  } catch { return null; }
+}
+
+function json(data, status, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { ...headers, 'Content-Type': 'application/json' },
+    headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
   });
 }

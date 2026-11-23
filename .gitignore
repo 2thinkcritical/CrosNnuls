@@ -9,3 +9,14 @@ wheels/
 # Virtual environments
 .venv
 .env
+
+# Local Worker tooling and credentials
+node_modules/
+.wrangler/
+.worker-build/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env.*
+!.env.example
+.DS_Store
