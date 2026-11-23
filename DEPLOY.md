@@ -1,69 +1,94 @@
-# 🚀 Инструкция по деплою
+# Deployment
 
-Выполните следующие шаги, чтобы запустить вашу игру «Крестики-нолики».
+The frontend and Telegram Worker are independent. Deploying the static game alone does not require a Cloudflare account or Telegram bot.
 
-## 1. Деплой бэкенда (Cloudflare Worker)
+## Static game on GitHub Pages
 
-Это необходимо для работы промокодов и интеграции с Telegram.
+1. In repository **Settings → Pages**, choose **Deploy from a branch**.
+2. Select the branch containing the reviewed changes and the `/docs` directory.
+3. Save and use the URL reported by GitHub Pages.
 
-1.  **Вход**: Зайдите на [Cloudflare Dashboard](https://dash.cloudflare.com/) и войдите в аккаунт.
-2.  **Создание воркера**:
-    *   Перейдите в **Workers & Pages** > **Overview**.
-    *   Нажмите **Create Application**.
-    *   Нажмите **Create Worker**.
-    *   Дайте имя (например, `tictactoe-backend`).
-    *   Нажмите **Deploy**.
-3.  **Обновление кода**:
-    *   Нажмите **Edit code**.
-    *   Удалите существующий код в `worker.js` (панель слева).
-    *   Скопируйте **весь код** из вашего локального файла `docs/worker.js`.
-    *   Вставьте его в редактор Cloudflare.
-    *   Нажмите **Save and Deploy** (вверху справа).
-4.  **Получение URL**:
-    *   Скопируйте URL воркера (например, `https://tictactoe-backend.your-name.workers.dev`).
-    *   **Сохраните этот URL**, он понадобится на следующем шаге.
+For this repository, the expected project URL is `https://2thinkcritical.github.io/CrosNnuls/`. Use the actual URL reported by GitHub; Pages must first be enabled and the selected branch must contain the changes.
 
-## 2. Настройка фронтенда
+Keep `WORKER_URL` and `BOT_USERNAME` empty in `docs/config.js` to publish a standalone game. No npm build is required for GitHub Pages.
 
-1.  Откройте файл `docs/game.js` в редакторе кода.
-2.  Найдите объект `CONFIG` в начале файла.
-3.  Замените значение `WORKER_URL` на ваш новый URL от Cloudflare.
-    ```javascript
-    const CONFIG = {
-      // ...
-      WORKER_URL: 'https://tictactoe-backend.your-name.workers.dev', // <-- Вставьте сюда
-      // ...
-    };
-    ```
-4.  Сохраните файл.
-5.  Закоммитьте и отправьте изменения на GitHub.
-    ```bash
-    git add docs/game.js
-    git commit -m "Update worker URL"
-    git push
-    ```
+## Optional Worker: local development
 
-## 3. Настройка переменных окружения
+Use Node.js 22.12+, Python 3, and a **new, unexposed** token for a dedicated demo bot. Do not reuse a token that has appeared in source control.
 
-1.  Вернитесь к вашему воркеру в Cloudflare Dashboard.
-2.  Перейдите в **Settings** > **Variables and Secrets**.
-3.  Добавьте следующие переменные:
-    *   `BOT_TOKEN`: Ваш токен Telegram бота (от BotFather).
-    *   `ALLOWED_ORIGINS`: `https://<your-github-username>.github.io` (Замените на ваш реальный URL GitHub Pages).
-4.  Нажмите **Save and Deploy** (если спросит) или просто Save.
+```sh
+npm ci
+cp .dev.vars.example .dev.vars
+```
 
-## 4. Деплой фронтенда (GitHub Pages)
+Edit `.dev.vars` locally and set `BOT_TOKEN`. This file is ignored by Git. Start the Worker:
 
-1.  Зайдите на страницу вашего репозитория в GitHub.
-2.  Нажмите **Settings** (верхняя вкладка).
-3.  Нажмите **Pages** (боковое меню слева).
-4.  В разделе **Build and deployment** > **Source**, выберите **Deploy from a branch**.
-5.  В разделе **Branch**, выберите `main` и убедитесь, что папка выбрана `/docs` (это важно!).
-6.  Нажмите **Save**.
+```sh
+npm run worker:dev
+```
 
-## 5. Проверка
+In another terminal, start the frontend:
 
-1.  Подождите пару минут.
-2.  Обновите страницу настроек GitHub Pages, чтобы увидеть ссылку на ваш сайт (обычно вверху).
-3.  Откройте ссылку.
-4.  Играйте!
+```sh
+python3 -m http.server 8080 --bind 127.0.0.1 --directory docs
+```
+
+For local integration testing, set the public settings in `docs/config.js`:
+
+```js
+window.TICTACTOE_CONFIG = Object.freeze({
+  WORKER_URL: 'http://127.0.0.1:8081',
+  BOT_USERNAME: 'your_demo_bot',
+});
+```
+
+Open `http://127.0.0.1:8080`. Connect Telegram, press **Start** in the bot, then return to the browser. You can always choose **Play without Telegram** instead. Restore blank settings before publishing a standalone demo.
+
+The old Python adapter and `restart.sh` have been retired. Wrangler runs the same Worker code locally and remotely; explicit foreground commands also avoid terminating unrelated processes on occupied ports.
+
+## Optional Worker: deployment
+
+1. In `wrangler.toml`, choose your Worker name and set `ALLOWED_ORIGINS` to the frontend origin. For GitHub Pages this is `https://2thinkcritical.github.io` — **no repository path and no trailing slash**. Multiple exact origins are separated by commas. Do not use `*`.
+2. Authenticate your own Cloudflare account and set the bot token as a secret:
+
+   ```sh
+   npx wrangler login
+   npx wrangler secret put BOT_TOKEN
+   ```
+
+   Enter the token only at the secret prompt. Never put it in `wrangler.toml`, `docs/config.js`, a commit, or a shell command saved in history.
+3. Validate and deploy:
+
+   ```sh
+   npm test
+   npm run worker:check
+   npx wrangler deploy
+   ```
+
+4. Set `WORKER_URL` in `docs/config.js` to the HTTPS URL reported by Wrangler, with no trailing slash. Set `BOT_USERNAME` to your bot's username, without `@`.
+5. Publish the frontend changes through your normal review workflow.
+
+No Cloudflare or Telegram configuration is changed by running the tests or dry-run bundle check.
+
+## HTTP contract
+
+All requests require an `Origin` present in `ALLOWED_ORIGINS`; the server rejects missing or unlisted origins. CORS is not an authentication mechanism.
+
+| Request | Input | Success |
+| --- | --- | --- |
+| `OPTIONS` | Allowed origin | `204` with CORS headers |
+| `GET /check?session=…` | Exactly 32 lowercase hexadecimal characters | `{ "chat_id": null }` while pending, or `{ "chat_id": 123, "receipt": "…" }` after a matching private `/start` |
+| `POST /send` | JSON `{ "receipt": "…", "result": "win" }` or result `"loss"` | `{ "ok": true }` after Telegram accepts the fixed message |
+
+Errors: `400` invalid input, `401` missing/invalid/expired receipt, `403` unlisted origin, `404` unknown route, `503` missing bot configuration, `502` upstream failure. The adapter does not return bot credentials or raw Telegram exceptions to the browser.
+
+Receipts are signed with HMAC-SHA-256 using the bot secret and expire after ten minutes. Rotating the bot token invalidates existing receipts. Reconnect Telegram after a receipt expires.
+
+## Troubleshooting
+
+- **CORS rejection:** check the exact scheme, host, and port in `ALLOWED_ORIGINS`.
+- **Connection remains pending:** use a private chat, press Start through the current session link, and ensure no webhook or other polling consumer is using the demo bot. The adapter only inspects 100 pending updates and intentionally does not advance the global update offset.
+- **Message not delivered:** check whether the bot is blocked, the token was rotated, or the receipt expired. The game does not report successful delivery until the Worker confirms it.
+- **Port already in use:** choose a different port and update the matching origin/URL. Do not kill unrelated processes.
+
+See [README limitations](README.md#scope-and-limitations) before exposing the optional integration publicly.
