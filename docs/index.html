@@ -1,56 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tic-Tac-Toe · Canvas Game</title>
-  <meta name="description" content="Play a space-themed Tic-Tac-Toe game with a rotating Canvas cube and a deliberately fallible computer opponent.">
-  <link rel="stylesheet" href="styles.css?v=3">
-  <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+  <meta name="description" content="Play Tic-Tac-Toe against a beatable computer on a rotating Canvas cube.">
+  <meta name="theme-color" content="#090e1b">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%231d263e'/><path d='M21 21L43 43M43 21L21 43' stroke='%23ff80ab' stroke-width='6' stroke-linecap='round'/></svg>">
 </head>
-
 <body>
-  <div class="game-container">
-    <!-- Фоновый canvas для звёздного неба -->
-    <canvas id="bg-canvas" aria-hidden="true"></canvas>
+  <canvas id="bg-canvas" aria-hidden="true"></canvas>
 
-    <!-- Заголовок -->
-    <h1 class="title">Tic-Tac-Toe<br><span class="subtitle">A small game in a big universe</span></h1>
+  <main class="game">
+    <header class="game-heading">
+      <h1>Tic-Tac-Toe</h1>
+      <p class="players"><span><b class="player-x">X</b> You</span><span><b class="player-o">O</b> Computer</span></p>
+    </header>
 
-    <!-- Игровой canvas (3D куб) -->
-    <canvas id="game-canvas" width="420" height="380" aria-label="Tic-Tac-Toe board. Click an empty square to play X.">Your browser needs Canvas support to play.</canvas>
-
-    <!-- Статус-бар -->
-    <div class="status-bar">
-      <p class="status-text" id="status-text" role="status" aria-live="polite">Your turn</p>
+    <div class="board-stage">
+      <canvas id="game-canvas" aria-hidden="true"></canvas>
+      <div id="board" class="board-grid" role="grid" aria-label="Tic-Tac-Toe board" aria-describedby="board-help"></div>
     </div>
 
-    <!-- Кнопка -->
-    <button class="game-btn" id="game-btn">Play again</button>
+    <section class="controls" aria-label="Game controls">
+      <p id="status-text" role="status" aria-atomic="true">Your turn</p>
+      <div class="buttons">
+        <button id="game-btn" type="button">Play again</button>
+        <button id="sound-btn" type="button" aria-pressed="false">Sound</button>
+      </div>
+      <p id="round-detail" aria-live="polite" aria-atomic="true"></p>
+      <p id="board-help">Arrow keys to move, Enter or Space to play.</p>
+    </section>
+  </main>
 
-    <!-- Кнопка музыки -->
-    <button class="music-btn" id="music-btn" aria-label="Toggle music">
-      🎵
-    </button>
-  </div>
-
-  <!-- Диалог старта игры через Telegram (без ввода логина) -->
-  <div class="dialog-overlay" id="username-dialog">
-    <div class="dialog-box">
-      <h2 class="dialog-title">Play with Telegram</h2>
-      <p class="dialog-subtitle">
-        Optional: connect a private chat to receive demo game results.<br><br>
-        Press Start in the bot, then return here. Demo codes have no monetary value.
-      </p>
-      <button class="dialog-btn" id="username-btn">Connect Telegram</button>
-      <button class="dialog-btn" id="demo-btn">Play without Telegram</button>
+  <dialog id="telegram-dialog" aria-labelledby="telegram-title" aria-describedby="telegram-help">
+    <h2 id="telegram-title">Play with Telegram</h2>
+    <p id="telegram-help">Connect a private chat to receive game results. Demo codes have no monetary value.</p>
+    <div class="buttons">
+      <button id="telegram-connect" type="button">Connect Telegram</button>
+      <button id="telegram-demo" type="button" autofocus>Play without Telegram</button>
     </div>
-  </div>
+    <p id="telegram-feedback" aria-live="polite"></p>
+  </dialog>
 
   <script src="config.js"></script>
-  <script src="game.js"></script>
+  <script type="module" src="game.js"></script>
 </body>
-
 </html>
