@@ -103,6 +103,9 @@ function move(index, mark) {
 
   round = next;
   render();
+  if (mark === 'O') {
+    status.textContent = `Computer played row ${Math.floor(index / 3) + 1}, column ${index % 3 + 1}. ${status.textContent}`;
+  }
   if (round.outcome) void reportOutcome(round);
   return true;
 }

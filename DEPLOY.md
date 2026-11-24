@@ -82,7 +82,7 @@ All requests require an `Origin` present in `ALLOWED_ORIGINS`; the server reject
 
 Errors: `400` invalid input, `401` missing/invalid/expired receipt, `403` unlisted origin, `404` unknown route, `503` missing bot configuration, `502` upstream failure. The adapter does not return bot credentials or raw Telegram exceptions to the browser.
 
-Receipts are signed with HMAC-SHA-256 using the bot secret and expire after ten minutes. Rotating the bot token invalidates existing receipts. Reconnect Telegram after a receipt expires.
+Receipts are signed with HMAC-SHA-256 using the bot secret and expire after ten minutes. Rotating the bot token invalidates existing receipts. After a receipt expires, the connection dialog reopens. Choose Connect Telegram to receive a fresh receipt, or continue without Telegram. No page reload is needed.
 
 ## Troubleshooting
 
