@@ -224,3 +224,42 @@ test('sound is opt-in and can be muted again using the same control', async ({ p
   await sound.click();
   await expect(sound).toHaveAttribute('aria-pressed', 'false');
 });
+
+test('the live region identifies the computer move', async ({ page }) => {
+  await openGame(page);
+  await square(page, 1, 1).click();
+  await expect(status(page)).toContainText('Computer played row 1, column 2');
+  await expect(status(page)).toContainText('Your turn');
+});
+
+test('an expired Telegram receipt can reconnect without reloading', async ({ page }, testInfo) => {
+  await configureTelegram(page, { WORKER_URL: 'https://adapter.test', BOT_USERNAME: 'demo_bot' });
+  await page.addInitScript(() => { window.open = () => {}; });
+  let checks = 0;
+  const receipts = [];
+  await page.route('https://adapter.test/check?*', route => {
+    checks++;
+    return route.fulfill({ json: { chat_id: 42, receipt: checks === 1 ? 'expired-receipt' : 'fresh-receipt' } });
+  });
+  await page.route('https://adapter.test/send', route => {
+    receipts.push(route.request().postDataJSON().receipt);
+    return route.fulfill({ status: receipts.length === 1 ? 401 : 200, json: receipts.length === 1 ? { error: 'expired' } : { ok: true } });
+  });
+  await openGame(page);
+  await page.getByRole('button', { name: 'Connect Telegram' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await winRound(page);
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.locator('#telegram-feedback')).toContainText('expired');
+  await page.getByRole('button', { name: 'Connect Telegram' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await page.getByRole('button', { name: 'Play again' }).click();
+  await winRound(page);
+  await expect(page.locator('#round-detail')).toHaveText('Result sent to Telegram.');
+  expect(receipts).toEqual(['expired-receipt', 'fresh-receipt']);
+  // Chromium reports the deliberately mocked 401 as a resource error.
+  const expected401 = testInfo.errorsFromPage.filter(text => text.includes('401 (Unauthorized)'));
+  expect(expected401.length).toBeLessThanOrEqual(1);
+  testInfo.errorsFromPage.splice(0, testInfo.errorsFromPage.length,
+    ...testInfo.errorsFromPage.filter(text => !text.includes('401 (Unauthorized)')));
+});

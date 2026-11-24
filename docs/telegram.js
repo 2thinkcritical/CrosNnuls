@@ -76,13 +76,22 @@ export function createTelegramConnection(config, dialog, onClose) {
     get connected() { return receipt !== null; },
     async send(result) {
       if (!receipt) return false;
+      const sendingReceipt = receipt;
       try {
         const response = await fetch(`${worker}/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ receipt, result }),
+          body: JSON.stringify({ receipt: sendingReceipt, result }),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT),
         });
+        if (response.status === 401 && receipt === sendingReceipt) {
+          receipt = null;
+          connectButton.disabled = false;
+          feedback.textContent = 'Your Telegram session expired. Reconnect or continue in demo mode.';
+          if (!dialog.open) dialog.showModal();
+          connectButton.focus();
+          return false;
+        }
         const data = await response.json();
         return response.ok && data.ok === true;
       } catch {
