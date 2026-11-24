@@ -1,12 +1,14 @@
-# Tic-Tac-Toe
+# Canvas Tic-Tac-Toe
 
-A space-themed browser game drawn with the Canvas 2D API. Play **X** against a deliberately fallible computer opponent on a board presented as a rotating cube.
+**[Play the live demo](https://2thinkcritical.github.io/CrosNnuls/)**
 
-The game runs as a static site. Telegram is an optional integration for demo result messages; no account, API key, or backend is required to play locally.
+Play X against a beatable computer on a rotating cube drawn with the Canvas 2D API. The static game runs without an account, backend, or build step.
 
-## Run locally
+![A round of Canvas Tic-Tac-Toe in progress, with pink X and cyan O on the cube's front face](docs/preview.png)
 
-Requires Python 3 for the static file server. There is no frontend build step.
+## Play locally
+
+Requires Python 3 for the static file server.
 
 ```sh
 git clone https://github.com/2thinkcritical/CrosNnuls.git
@@ -14,54 +16,43 @@ cd CrosNnuls
 python3 -m http.server 8080 --bind 127.0.0.1 --directory docs
 ```
 
-Open **http://127.0.0.1:8080**. Click an empty square to place X; the computer responds with O. Use **Play again** to reset the board. Music can be toggled with the sound button and may require a user gesture before the browser allows playback.
+Open [the local game](http://127.0.0.1:8080). Click or tap an empty square, or Tab to the board and use the arrow keys to move between cells. Enter and Space place your X. **Play again** starts a new round. The **Sound** toggle enables a short synthesized click. The game follows your system's reduced-motion setting.
 
-Winning displays `DEMO-WIN`, a demonstration code with **no monetary or redemption value**.
+A win shows `DEMO-WIN`, a demonstration code with no redemption value. The opponent checks for wins and blocks but sometimes deliberately chooses another move.
 
-## What the project demonstrates
-
-- Projecting a 3D cube onto a 2D canvas, including polygon-based pointer hit testing.
-- Animating symbols, cube rotation, and win feedback without a rendering framework.
-- Keeping turn state, terminal states, and delayed computer moves coordinated.
-- Connecting a static frontend to a separately deployed Telegram adapter without exposing bot credentials.
-- Testing the game state and HTTP boundary with Node's built-in test runner.
-
-The computer uses a heuristic policy with intentional random mistakes. It is designed to be beatable and does not use minimax or machine learning.
-
-## Structure
+## How it works
 
 | Path | Responsibility |
 | --- | --- |
-| `docs/index.html` | Page structure, game canvas, and optional connection dialog |
-| `docs/game.js` | Rendering, input handling, animations, and game state |
-| `docs/config.js` | Public browser settings; empty values select standalone mode |
-| `docs/styles.css` | Responsive layout and visual styling |
-| `docs/worker.js` | Optional Telegram HTTP adapter |
-| `wrangler.toml` | Worker entry point and local origin configuration |
-| `tests/` | Game-state and Worker regression tests |
-| `generate_sound.py` | Standard-library utility for generating the click sound |
+| `docs/game.js` | Board controls, status announcements, turn scheduling, and resets |
+| `docs/rules.js` | Pure round transitions, winning lines, and the computer opponent |
+| `docs/geometry.js` | 3D rotation, 2D projection, and the matching transform for the HTML grid |
+| `docs/scene.js` | High-DPI Canvas rendering, animation, and the procedural starfield |
+| `docs/audio.js` | Opt-in Web Audio tone synthesis |
+| `docs/telegram.js` | Optional connection dialog, session polling, and result delivery |
+| `docs/config.js` | Public Telegram settings, blank by default |
+| `docs/worker.js` | Optional Cloudflare Worker for the Telegram Bot API |
+
+The front face is drawn in Canvas. An HTML grid of buttons follows the same projection, so pointer and keyboard input use the same nine targets. The stars and sound are generated in the browser from code in this repository.
 
 ## Verify
 
-Requires **Node.js 22.12+**. Tests and syntax checks do not need npm dependencies, credentials, or live Telegram requests.
-
-```sh
-npm test
-npm run check
-```
-
-To check the Worker bundle using the pinned development tool:
+Requires Node.js 22.12+ and Python 3. The browser suite launches an isolated headless Chromium against the local static site.
 
 ```sh
 npm ci
+npx playwright install --only-shell chromium
+npm test
+npm run check
 npm run worker:check
+npm run test:browser
 ```
 
-CI runs the tests, JavaScript syntax checks, and Worker bundle validation on pushes and pull requests. External HTTP responses are replaced with fixtures in tests; a passing suite does not claim a live Telegram deployment was verified.
+The Node suite checks round rules, projection alignment, and the Worker HTTP contract. The Playwright suite checks a legal round, rapid resets, keyboard navigation, touch, high-DPI rendering, short viewports, reduced motion, and the optional Telegram flow with network fixtures. CI runs both suites and validates the Worker bundle on pushes and pull requests. The test run uses no bot token and sends no Telegram messages.
 
 ## Optional Telegram integration
 
-Leave `docs/config.js` unchanged for standalone play. To connect your own bot, follow [the deployment guide](DEPLOY.md). Bot credentials are stored in Worker secrets or a local, ignored `.dev.vars` file, never in browser JavaScript.
+Follow [the deployment guide](DEPLOY.md) to connect a bot. Keep the public settings in `docs/config.js` blank for standalone play. Store bot credentials in Worker secrets or an ignored local `.dev.vars` file.
 
 ```text
 Browser ── /check?session=<random ID> ──► Worker ──► Telegram getUpdates
@@ -69,14 +60,11 @@ Browser ── /check?session=<random ID> ──► Worker ──► Telegram ge
 Browser ── /send {receipt, result} ─────► Worker ──► fixed result message
 ```
 
-The Worker accepts a private chat only after receiving the matching `/start` payload. Result messages require a signed receipt that expires after ten minutes. Callers cannot select arbitrary destination chats or supply message text.
+The Worker matches the `/start` payload in a private chat and issues a signed receipt that expires after ten minutes. The receipt determines the destination chat, and the Worker selects the message from fixed result text.
 
 ## Scope and limitations
 
-- This is a portfolio game and integration prototype. Results are determined in the browser and are not proof of a legitimate win. Demo codes are not a reward system.
-- Telegram polling reads at most the earliest 100 unconfirmed updates and does not acknowledge them. Updates can be repeated, stale entries can prevent discovery of newer ones, and a webhook or another polling consumer conflicts with this adapter. Use a dedicated, low-traffic demo bot. A production integration needs a webhook, durable session storage, expiry, and rate limits.
-- Signed receipts can be replayed until expiry. An unconfirmed `/start` update can issue fresh receipts until it leaves Telegram’s pending queue. Origin filtering limits browser access; CORS is not authentication or abuse prevention.
-- The game board currently supports pointer input. Full keyboard and screen-reader gameplay, reduced-motion behavior, and high-DPI rendering remain future work.
-- Background art and audio are included in `docs/`. Their provenance and redistribution terms have not been established in this repository. No repository-wide license is declared.
-
-Credential exposure should be handled privately with the owner: revoke the affected token through BotFather and update the Worker secret. Removing a token from a current file does not remove it from Git history.
+- Results come from the browser, so the integration is suitable for demo notifications. A game result does not establish that someone won fairly.
+- The demo Worker checks at most the earliest 100 pending Telegram updates and leaves them unconfirmed. Older entries can prevent discovery of new ones. Use a dedicated, low-traffic bot without another polling consumer or webhook.
+- Signed receipts can be replayed until they expire, and a pending `/start` can issue another receipt. A production integration would need durable sessions, replay protection, rate limiting, and a webhook.
+- Automated browser coverage uses Chromium, including mobile emulation. No repository-wide license is declared.
