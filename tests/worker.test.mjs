@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const source = await readFile(new URL('../docs/worker.js', import.meta.url), 'utf8');
-const { default: worker } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+import worker from '../worker/index.js';
+
 const origin = 'http://localhost:8080';
-const env = { BOT_TOKEN: 'test-token-not-a-credential', ALLOWED_ORIGINS: origin };
+const env = {
+  BOT_TOKEN: 'test-token-not-a-credential',
+  RECEIPT_SECRET: 'test-receipt-secret-not-a-credential',
+  ALLOWED_ORIGINS: origin,
+};
 const session = '0123456789abcdef0123456789abcdef';
 function request(path, options = {}) {
   return new Request(`https://worker.example${path}`, { ...options, headers: { Origin: origin, ...options.headers } });
@@ -30,8 +33,10 @@ test('rejects a malformed session', async () => {
   assert.equal(response.status, 400);
 });
 test('reports missing server configuration without exposing it', async () => {
-  const response = await worker.fetch(request('/check?session=' + session), { ALLOWED_ORIGINS: origin });
-  assert.equal(response.status, 503);
+  for (const partial of [{ BOT_TOKEN: env.BOT_TOKEN }, { RECEIPT_SECRET: env.RECEIPT_SECRET }]) {
+    const response = await worker.fetch(request('/check?session=' + session), { ...partial, ALLOWED_ORIGINS: origin });
+    assert.equal(response.status, 503);
+  }
 });
 test('does not accept caller-supplied chat IDs and message text', async () => {
   const response = await worker.fetch(request('/send', { method: 'POST', body: JSON.stringify({ chat_id: 123, text: 'arbitrary content' }) }), env);
@@ -73,6 +78,9 @@ test('connects only a matching private /start session, then authenticates fixed 
     }
     const invalidResult = await worker.fetch(request('/send', { method: 'POST', body: JSON.stringify({ receipt: data.receipt, result: 'custom' }) }), env);
     assert.equal(invalidResult.status, 400);
+    const rotated = { ...env, RECEIPT_SECRET: 'a-different-receipt-secret' };
+    const afterRotation = await worker.fetch(request('/send', { method: 'POST', body: JSON.stringify({ receipt: data.receipt, result: 'win' }) }), rotated);
+    assert.equal(afterRotation.status, 401);
   } finally { globalThis.fetch = originalFetch; }
 });
 test('an unmatched Telegram session stays pending', async () => {

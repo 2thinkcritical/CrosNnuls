@@ -1,7 +1,14 @@
+import { element } from './dom.js';
+
 const CHECK_INTERVAL = 2_000;
 const MAX_CHECKS = 31;
 const REQUEST_TIMEOUT = 10_000;
 
+/**
+ * Resolves after the polling interval, or immediately when aborted.
+ * @param {AbortSignal} signal
+ * @returns {Promise<void>}
+ */
 function waitForNextCheck(signal) {
   return new Promise(resolve => {
     function finish() {
@@ -15,15 +22,26 @@ function waitForNextCheck(signal) {
   });
 }
 
+/** @typedef {{ readonly connected: boolean, send(result: 'win' | 'loss'): Promise<boolean> }} TelegramConnection */
+
+/**
+ * Opens the optional connection dialog when the Worker is configured.
+ * @param {TicTacToeConfig | undefined} config
+ * @param {HTMLDialogElement} dialog
+ * @param {() => void} onClose
+ * @returns {TelegramConnection | null}
+ */
 export function createTelegramConnection(config, dialog, onClose) {
   const worker = config?.WORKER_URL?.trim().replace(/\/+$/, '');
   const bot = config?.BOT_USERNAME?.trim();
+  /** @type {string | null} */
   let receipt = null;
   if (!worker || !bot) return null;
 
-  const connectButton = dialog.querySelector('#telegram-connect');
-  const demoButton = dialog.querySelector('#telegram-demo');
-  const feedback = dialog.querySelector('#telegram-feedback');
+  const connectButton = element('#telegram-connect', HTMLButtonElement, dialog);
+  const demoButton = element('#telegram-demo', HTMLButtonElement, dialog);
+  const feedback = element('#telegram-feedback', HTMLElement, dialog);
+  /** @type {AbortController | undefined} */
   let connection;
 
   function finish() {

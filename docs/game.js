@@ -1,4 +1,5 @@
 import { createSound } from './audio.js';
+import { element } from './dom.js';
 import { BOARD_SIZE } from './geometry.js';
 import { chooseComputerMove, newRound, placeMark } from './rules.js';
 import { createScene, drawStarfield } from './scene.js';
@@ -7,17 +8,22 @@ import { createTelegramConnection } from './telegram.js';
 const COMPUTER_DELAY = 450;
 const OUTCOME_LABEL = { X: 'You win!', O: 'Computer wins', draw: 'Draw!' };
 
-const grid = document.querySelector('#board');
-const status = document.querySelector('#status-text');
-const detail = document.querySelector('#round-detail');
-const reset = document.querySelector('#game-btn');
-const sound = createSound(document.querySelector('#sound-btn'));
+/** @typedef {import('./rules.js').Mark} Mark */
+/** @typedef {import('./rules.js').Round} Round */
+
+const grid = element('#board', HTMLElement);
+const status = element('#status-text', HTMLElement);
+const detail = element('#round-detail', HTMLElement);
+const reset = element('#game-btn', HTMLButtonElement);
+const sound = createSound(element('#sound-btn', HTMLButtonElement));
+/** @type {HTMLButtonElement[]} */
 const squares = [];
 let activeSquare = 0;
 let round = newRound();
+/** @type {ReturnType<typeof setTimeout> | undefined} */
 let computerTimer;
-const scene = createScene(document.querySelector('#game-canvas'), grid, round);
-drawStarfield(document.querySelector('#bg-canvas'));
+const scene = createScene(element('#game-canvas', HTMLCanvasElement), grid, round);
+drawStarfield(element('#bg-canvas', HTMLCanvasElement));
 
 grid.style.setProperty('--board-size', `${BOARD_SIZE}px`);
 for (let row = 0; row < 3; row++) {
@@ -44,10 +50,11 @@ for (let row = 0; row < 3; row++) {
 
 const telegram = createTelegramConnection(
   window.TICTACTOE_CONFIG,
-  document.querySelector('#telegram-dialog'),
+  element('#telegram-dialog', HTMLDialogElement),
   () => squares[activeSquare].focus(),
 );
 
+/** @param {number} index */
 function setActiveSquare(index) {
   squares[activeSquare].tabIndex = -1;
   squares[index].tabIndex = 0;
@@ -69,6 +76,7 @@ grid.addEventListener('keydown', event => {
   squares[next].focus();
 });
 
+/** @param {{ reset?: boolean, rotate?: boolean }} [options] */
 function render(options) {
   for (const [index, square] of squares.entries()) {
     const row = Math.floor(index / 3) + 1;
@@ -85,7 +93,9 @@ function render(options) {
   scene.show(round, options);
 }
 
+/** @param {Round} finished a round with an outcome */
 async function reportOutcome(finished) {
+  if (!finished.outcome) return;
   const { result } = finished.outcome;
   if (result === 'draw') return;
   if (result === 'X') detail.textContent = 'Demo code: DEMO-WIN';
@@ -97,7 +107,13 @@ async function reportOutcome(finished) {
     : result === 'X' ? 'Demo code: DEMO-WIN · Telegram delivery failed.' : 'Telegram delivery failed.';
 }
 
+/**
+ * @param {number | null} index
+ * @param {Mark} mark
+ * @returns {boolean} whether the move was legal
+ */
 function move(index, mark) {
+  if (index === null) return false;
   const next = placeMark(round, index, mark);
   if (round === next) return false;
 
@@ -110,6 +126,7 @@ function move(index, mark) {
   return true;
 }
 
+/** @param {number} index */
 function playerMove(index) {
   if (!move(index, 'X')) return;
   void sound.click();

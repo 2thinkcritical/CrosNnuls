@@ -1,5 +1,7 @@
 # Canvas Tic-Tac-Toe
 
+[![CI](https://github.com/2thinkcritical/CrosNnuls/actions/workflows/ci.yml/badge.svg)](https://github.com/2thinkcritical/CrosNnuls/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 **[Play the live demo](https://2thinkcritical.github.io/CrosNnuls/)**
 
 Play X against a beatable computer on a rotating cube drawn with the Canvas 2D API. The static game runs without an account, backend, or build step.
@@ -31,7 +33,8 @@ A win shows `DEMO-WIN`, a demonstration code with no redemption value. The oppon
 | `docs/audio.js` | Opt-in Web Audio tone synthesis |
 | `docs/telegram.js` | Optional connection dialog, session polling, and result delivery |
 | `docs/config.js` | Public Telegram settings, blank by default |
-| `docs/worker.js` | Optional Cloudflare Worker for the Telegram Bot API |
+| `docs/dom.js` | Typed lookup of required elements |
+| `worker/index.js` | Optional Cloudflare Worker for the Telegram Bot API (not published with the site) |
 
 The front face is drawn in Canvas. An HTML grid of buttons follows the same projection, so pointer and keyboard input use the same nine targets. The stars and sound are generated in the browser from code in this repository.
 
@@ -42,17 +45,18 @@ Requires Node.js 22.12+ and Python 3. The browser suite launches an isolated hea
 ```sh
 npm ci
 npx playwright install --only-shell chromium
+npm run lint
+npm run typecheck
 npm test
-npm run check
 npm run worker:check
 npm run test:browser
 ```
 
-The Node suite checks round rules, projection alignment, and the Worker HTTP contract. The Playwright suite checks a legal round, rapid resets, keyboard navigation, touch, high-DPI rendering, short viewports, reduced motion, and the optional Telegram flow with network fixtures. CI runs both suites and validates the Worker bundle on pushes and pull requests. The test run uses no bot token and sends no Telegram messages.
+The code is plain ES modules with no build step. It is type-checked in strict mode by TypeScript through JSDoc annotations (`checkJs`), and linted with ESLint. The Node suite checks round rules, projection alignment, and the Worker HTTP contract. The Playwright suite checks a legal round, rapid resets, keyboard navigation, touch, high-DPI rendering, short viewports, reduced motion, and the optional Telegram flow with network fixtures. CI runs both suites and validates the Worker bundle on pushes and pull requests. The test run uses no bot token and sends no Telegram messages.
 
 ## Optional Telegram integration
 
-Follow [the deployment guide](DEPLOY.md) to connect a bot. Keep the public settings in `docs/config.js` blank for standalone play. Store bot credentials in Worker secrets or an ignored local `.dev.vars` file.
+Follow [the deployment guide](DEPLOY.md) to connect a bot. Keep the public settings in `docs/config.js` blank for standalone play. Store `BOT_TOKEN` and the receipt-signing `RECEIPT_SECRET` in Worker secrets or an ignored local `.dev.vars` file.
 
 ```text
 Browser ── /check?session=<random ID> ──► Worker ──► Telegram getUpdates
@@ -67,4 +71,4 @@ The Worker matches the `/start` payload in a private chat and issues a signed re
 - Results come from the browser, so the integration is suitable for demo notifications. A game result does not establish that someone won fairly.
 - The demo Worker checks at most the earliest 100 pending Telegram updates and leaves them unconfirmed. Older entries can prevent discovery of new ones. Use a dedicated, low-traffic bot without another polling consumer or webhook.
 - Signed receipts can be replayed until they expire, and a pending `/start` can issue another receipt. A production integration would need durable sessions, replay protection, rate limiting, and a webhook.
-- Automated browser coverage uses Chromium, including mobile emulation. No repository-wide license is declared.
+- Automated browser coverage uses Chromium, including mobile emulation.

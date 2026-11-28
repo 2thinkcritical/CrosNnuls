@@ -27,6 +27,7 @@ test.beforeEach(async ({ page }, testInfo) => {
   testInfo.errorsFromPage = errors;
 });
 
+// eslint-disable-next-line no-empty-pattern -- Playwright passes fixtures as the first argument.
 test.afterEach(({}, testInfo) => {
   expect(testInfo.errorsFromPage).toEqual([]);
 });
