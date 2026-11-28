@@ -3,13 +3,21 @@ import {
   boardMatrix, cellCenter, cubeTransform, projectPoint, rotatePoint,
 } from './geometry.js';
 
+/** @typedef {import('./geometry.js').Vec3} Vec3 */
+/** @typedef {import('./geometry.js').Transform} Transform */
+/** @typedef {import('./rules.js').Mark} Mark */
+/** @typedef {import('./rules.js').Round} Round */
+/** @typedef {{ normal: Vec3, u: Vec3, v: Vec3, fill: string, board?: boolean }} Face */
+
 const HALF = BOARD_SIZE / 2;
 const MOVE_DURATION = 175;
 const RESET_DURATION = 460;
 const TAU = 2 * Math.PI;
+/** @type {Record<Mark, string>} */
 const INK = { X: '#ff80ab', O: '#76e8ef' };
 
 // Axes in the plane of each face, with brighter fills on the lit sides.
+/** @type {Face[]} */
 const FACES = [
   { normal: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], fill: '#1d263e', board: true },
   { normal: [0, 0, -1], u: [1, 0, 0], v: [0, 1, 0], fill: '#1a2337' },
@@ -19,10 +27,23 @@ const FACES = [
   { normal: [-1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], fill: '#212b44' },
 ];
 
+/**
+ * @param {Face} face
+ * @param {number} u offset along the face's first axis
+ * @param {number} v offset along the face's second axis
+ * @returns {Vec3}
+ */
 function facePoint(face, u, v) {
-  return face.normal.map((normal, axis) => normal * HALF + face.u[axis] * u + face.v[axis] * v);
+  const [x, y, z] = face.normal.map((normal, axis) => normal * HALF + face.u[axis] * u + face.v[axis] * v);
+  return [x, y, z];
 }
 
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Vec3[]} points
+ * @param {Transform} transform
+ * @param {boolean} [closed]
+ */
 function drawPath(ctx, points, transform, closed = false) {
   ctx.beginPath();
   for (const [index, point] of points.entries()) {
@@ -33,6 +54,11 @@ function drawPath(ctx, points, transform, closed = false) {
   if (closed) ctx.closePath();
 }
 
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Face} face
+ * @param {Transform} transform
+ */
 function drawFace(ctx, face, transform) {
   drawPath(ctx, [
     facePoint(face, -HALF, -HALF), facePoint(face, -HALF, HALF),
@@ -55,6 +81,13 @@ function drawFace(ctx, face, transform) {
   }
 }
 
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} index
+ * @param {Mark} mark
+ * @param {number} progress animation progress, 0-1
+ * @param {Transform} transform
+ */
 function drawMark(ctx, index, mark, progress, transform) {
   const [x, y, z] = cellCenter(index);
   const radius = CELL_SIZE * 0.27 * progress;
@@ -71,6 +104,7 @@ function drawMark(ctx, index, mark, progress, transform) {
     ctx.stroke();
     drawPath(ctx, [[x + radius, y + radius, z], [x - radius, y - radius, z]], transform);
   } else {
+    /** @type {Vec3[]} */
     const ring = Array.from({ length: 36 }, (_, i) => {
       const angle = i * TAU / 36;
       return [x + radius * Math.cos(angle), y + radius * Math.sin(angle), z];
@@ -81,6 +115,11 @@ function drawMark(ctx, index, mark, progress, transform) {
   ctx.restore();
 }
 
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number[]} line
+ * @param {Transform} transform
+ */
 function drawWinningLine(ctx, line, transform) {
   ctx.save();
   ctx.lineCap = 'round';
@@ -93,6 +132,12 @@ function drawWinningLine(ctx, line, transform) {
   ctx.restore();
 }
 
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Round} round
+ * @param {number} rotation
+ * @param {number[]} progress per-cell animation progress
+ */
 function drawCube(ctx, round, rotation, progress) {
   ctx.clearRect(0, 0, SCENE_WIDTH, SCENE_HEIGHT);
   const transform = cubeTransform(rotation);
@@ -112,6 +157,13 @@ function drawCube(ctx, round, rotation, progress) {
   }
 }
 
+/**
+ * Sizes the backing store for the device pixel ratio and scales drawing to logical units.
+ * @param {HTMLCanvasElement} canvas
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} logicalWidth
+ * @param {number} logicalHeight
+ */
 function resizeCanvas(canvas, ctx, logicalWidth, logicalHeight) {
   const { width, height } = canvas.getBoundingClientRect();
   const ratio = Math.min(window.devicePixelRatio || 1, 3);
@@ -123,14 +175,30 @@ function resizeCanvas(canvas, ctx, logicalWidth, logicalHeight) {
   return { width, height };
 }
 
-export function createScene(canvas, grid, initialRound) {
+/** @param {HTMLCanvasElement} canvas */
+function context2d(canvas) {
   const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas 2D is not supported');
+  return ctx;
+}
+
+/**
+ * @param {HTMLCanvasElement} canvas
+ * @param {HTMLElement} grid the HTML button grid kept aligned with the front face
+ * @param {Round} initialRound
+ */
+export function createScene(canvas, grid, initialRound) {
+  const ctx = context2d(canvas);
   const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  /** @type {Map<number, number>} */
   const markStarted = new Map();
   let round = initialRound;
+  /** @type {number | null} */
   let resetStarted = null;
+  /** @type {number | null} */
   let frame = null;
 
+  /** @param {number} time */
   function paint(time) {
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
@@ -139,10 +207,11 @@ export function createScene(canvas, grid, initialRound) {
     }
     if (resetStarted !== null && time - resetStarted >= RESET_DURATION) resetStarted = null;
     const rotating = resetStarted !== null;
-    const resetProgress = rotating ? (time - resetStarted) / RESET_DURATION : 1;
-    const progress = round.board.map((_, index) => markStarted.has(index)
-      ? 1 - (1 - Math.max(0, time - markStarted.get(index)) / MOVE_DURATION) ** 3
-      : 1);
+    const resetProgress = resetStarted === null ? 1 : (time - resetStarted) / RESET_DURATION;
+    const progress = round.board.map((_, index) => {
+      const started = markStarted.get(index);
+      return started === undefined ? 1 : 1 - (1 - Math.max(0, time - started) / MOVE_DURATION) ** 3;
+    });
     drawCube(ctx, round, TAU * (1 - (1 - Math.max(0, resetProgress)) ** 3), progress);
     grid.classList.toggle('rotating', rotating);
     if (rotating || markStarted.size) frame = requestAnimationFrame(paint);
@@ -164,6 +233,10 @@ export function createScene(canvas, grid, initialRound) {
   resize();
 
   return {
+    /**
+     * @param {Round} next
+     * @param {{ reset?: boolean, rotate?: boolean }} [options]
+     */
     show(next, { reset = false, rotate = false } = {}) {
       const now = performance.now();
       resetStarted = rotate && !motion.matches ? now : null;
@@ -179,8 +252,9 @@ export function createScene(canvas, grid, initialRound) {
   };
 }
 
+/** @param {HTMLCanvasElement} canvas */
 export function drawStarfield(canvas) {
-  const ctx = canvas.getContext('2d');
+  const ctx = context2d(canvas);
   function resize() {
     const { width, height } = canvas.getBoundingClientRect();
     if (!width || !height) return;

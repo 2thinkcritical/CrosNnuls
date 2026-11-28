@@ -1,3 +1,6 @@
+/** @typedef {[number, number, number]} Vec3 */
+/** @typedef {{ cosHeading: number, sinHeading: number, cosTilt: number, sinTilt: number }} Transform */
+
 export const SCENE_WIDTH = 420;
 export const SCENE_HEIGHT = 380;
 export const BOARD_SIZE = 300;
@@ -8,6 +11,10 @@ const TILT = 15 * Math.PI / 180;
 const HEADING = -20 * Math.PI / 180;
 const SCALE = 0.9;
 
+/**
+ * @param {number} [angle] extra rotation around the vertical axis, in radians
+ * @returns {Transform}
+ */
 export function cubeTransform(angle = 0) {
   const heading = HEADING + angle;
   return {
@@ -16,6 +23,11 @@ export function cubeTransform(angle = 0) {
   };
 }
 
+/**
+ * @param {Vec3} point
+ * @param {Transform} transform
+ * @returns {Vec3}
+ */
 export function rotatePoint([x, y, z], { cosHeading, sinHeading, cosTilt, sinTilt }) {
   const depth = z * cosHeading - x * sinHeading;
   return [
@@ -25,11 +37,20 @@ export function rotatePoint([x, y, z], { cosHeading, sinHeading, cosTilt, sinTil
   ];
 }
 
+/**
+ * @param {Vec3} point
+ * @param {Transform} transform
+ * @returns {[number, number]} scene coordinates
+ */
 export function projectPoint(point, transform) {
   const [x, y] = rotatePoint(point, transform);
   return [SCENE_WIDTH / 2 + x * SCALE, SCENE_HEIGHT / 2 - 5 - y * SCALE];
 }
 
+/**
+ * @param {number} index board cell, 0-8
+ * @returns {Vec3} centre on the cube's front face
+ */
 export function cellCenter(index) {
   return [
     -HALF + (index % 3 + 0.5) * CELL_SIZE,
@@ -38,6 +59,12 @@ export function cellCenter(index) {
   ];
 }
 
+/**
+ * CSS matrix that maps the HTML grid onto the projected front face.
+ * @param {number} width rendered canvas width
+ * @param {number} height rendered canvas height
+ * @returns {number[]}
+ */
 export function boardMatrix(width, height) {
   const sx = width / SCENE_WIDTH;
   const sy = height / SCENE_HEIGHT;

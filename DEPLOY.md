@@ -14,14 +14,14 @@ Keep `WORKER_URL` and `BOT_USERNAME` empty in `docs/config.js` to publish a stan
 
 ## Optional Worker: local development
 
-Use Node.js 22.12+, Python 3, and a **new, unexposed** token for a dedicated demo bot. Do not reuse a token that has appeared in source control.
+Use Node.js 22.12+, Python 3, and the token of a dedicated demo bot.
 
 ```sh
 npm ci
 cp .dev.vars.example .dev.vars
 ```
 
-Edit `.dev.vars` locally and set `BOT_TOKEN`. This file is ignored by Git. Start the Worker:
+Edit `.dev.vars` locally: set `BOT_TOKEN`, and set `RECEIPT_SECRET` to the output of `openssl rand -hex 32`. This file is ignored by Git. Start the Worker:
 
 ```sh
 npm run worker:dev
@@ -44,19 +44,20 @@ window.TICTACTOE_CONFIG = Object.freeze({
 
 Open `http://127.0.0.1:8080`. Connect Telegram, press **Start** in the bot, then return to the browser. You can always choose **Play without Telegram** instead. Restore blank settings before publishing a standalone demo.
 
-The old Python adapter and `restart.sh` have been retired. Wrangler runs the same Worker code locally and remotely; explicit foreground commands also avoid terminating unrelated processes on occupied ports.
+Wrangler runs the same Worker code locally and remotely.
 
 ## Optional Worker: deployment
 
 1. In `wrangler.toml`, choose your Worker name and set `ALLOWED_ORIGINS` to the frontend origin. For GitHub Pages this is `https://2thinkcritical.github.io` — **no repository path and no trailing slash**. Multiple exact origins are separated by commas. Do not use `*`.
-2. Authenticate your own Cloudflare account and set the bot token as a secret:
+2. Authenticate your own Cloudflare account and set both secrets:
 
    ```sh
    npx wrangler login
    npx wrangler secret put BOT_TOKEN
+   npx wrangler secret put RECEIPT_SECRET   # e.g. the output of: openssl rand -hex 32
    ```
 
-   Enter the token only at the secret prompt. Never put it in `wrangler.toml`, `docs/config.js`, a commit, or a shell command saved in history.
+   Enter the values only at the secret prompts. Never put it in `wrangler.toml`, `docs/config.js`, a commit, or a shell command saved in history.
 3. Validate and deploy:
 
    ```sh
@@ -80,15 +81,15 @@ All requests require an `Origin` present in `ALLOWED_ORIGINS`; the server reject
 | `GET /check?session=…` | Exactly 32 lowercase hexadecimal characters | `{ "chat_id": null }` while pending, or `{ "chat_id": 123, "receipt": "…" }` after a matching private `/start` |
 | `POST /send` | JSON `{ "receipt": "…", "result": "win" }` or result `"loss"` | `{ "ok": true }` after Telegram accepts the fixed message |
 
-Errors: `400` invalid input, `401` missing/invalid/expired receipt, `403` unlisted origin, `404` unknown route, `503` missing bot configuration, `502` upstream failure. The adapter does not return bot credentials or raw Telegram exceptions to the browser.
+Errors: `400` invalid input, `401` missing/invalid/expired receipt, `403` unlisted origin, `404` unknown route, `503` missing `BOT_TOKEN` or `RECEIPT_SECRET`, `502` upstream failure. The adapter does not return bot credentials or raw Telegram exceptions to the browser.
 
-Receipts are signed with HMAC-SHA-256 using the bot secret and expire after ten minutes. Rotating the bot token invalidates existing receipts. After a receipt expires, the connection dialog reopens. Choose Connect Telegram to receive a fresh receipt, or continue without Telegram. No page reload is needed.
+Receipts are signed with HMAC-SHA-256 using `RECEIPT_SECRET` and expire after ten minutes. Rotating `RECEIPT_SECRET` invalidates existing receipts; rotating the bot token does not. After a receipt expires, the connection dialog reopens. Choose Connect Telegram to receive a fresh receipt, or continue without Telegram. No page reload is needed.
 
 ## Troubleshooting
 
 - **CORS rejection:** check the exact scheme, host, and port in `ALLOWED_ORIGINS`.
 - **Connection remains pending:** use a private chat, press Start through the current session link, and ensure no webhook or other polling consumer is using the demo bot. The adapter only inspects 100 pending updates and intentionally does not advance the global update offset.
-- **Message not delivered:** check whether the bot is blocked, the token was rotated, or the receipt expired. The game does not report successful delivery until the Worker confirms it.
+- **Message not delivered:** check whether the bot is blocked, the bot token is still valid, or the receipt expired. The game does not report successful delivery until the Worker confirms it.
 - **Port already in use:** choose a different port and update the matching origin/URL. Do not kill unrelated processes.
 
 See [README limitations](README.md#scope-and-limitations) before exposing the optional integration publicly.
