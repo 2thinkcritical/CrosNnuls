@@ -4,9 +4,9 @@
 
 **[Play it live](https://2thinkcritical.github.io/CrosNnuls/)**
 
-Play X against a beatable computer on a rotating cube, under a night sky painted entirely in code. There is no framework, no build step and no image or audio files: just ES modules and the Canvas 2D API.
+Play X against a beatable computer on a rotating cube under a starry sky. There is no framework and no build step: just ES modules and the Canvas 2D API.
 
-![A round in progress: neon X and O marks on a violet cube under a starry sky with a crescent moon](docs/preview.png)
+![A round in progress: neon X and O marks on a violet cube; behind it, a girl sits by a lake under the Milky Way](docs/preview.jpg)
 
 ## Play locally
 
@@ -28,12 +28,13 @@ The computer always takes a winning move or blocks yours, except when it deliber
 | `docs/rules.js` | Pure round transitions, winning lines and the computer opponent |
 | `docs/geometry.js` | 3D rotation, 2D projection and the matching transform for the HTML grid |
 | `docs/scene.js` | High-DPI Canvas rendering and animation of the cube |
-| `docs/sky.js` | The night sky: Milky Way, moon, clouds, a stargazer on the hill, twinkling and shooting stars |
+| `docs/sky.js` | Animated layer over the illustration: twinkling and shooting stars |
+| `docs/background.webp` | Background illustration, with a JPEG fallback |
 | `docs/audio.js` | Opt-in Web Audio tone synthesis |
 | `docs/dom.js` | Typed lookup of required elements |
 | `docs/fonts/` | Self-hosted Fredoka and Nunito variable fonts (SIL Open Font License) |
 
-The front face is drawn in Canvas. An invisible HTML grid of buttons follows the same projection, so mouse, touch and keyboard all use the same nine accessible targets. The sky is generated from a fixed seed, so it looks the same on every visit.
+The front face is drawn in Canvas. An invisible HTML grid of buttons follows the same projection, so mouse, touch and keyboard all use the same nine accessible targets. Sound is synthesized in the browser, so there are no audio files.
 
 ## Verify
 

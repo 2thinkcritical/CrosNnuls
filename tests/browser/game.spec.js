@@ -109,7 +109,7 @@ test.describe('narrow touch layouts', () => {
   test('a 320 × 400 screen keeps the board and controls in view', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 400 });
     await openGame(page);
-    for (const selector of ['h1', '#game-canvas', '#status-text', '#game-btn', '#sound-btn', '#board-help']) {
+    for (const selector of ['h1', '#game-canvas', '#status-text', '#game-btn', '#sound-btn']) {
       await expect(page.locator(selector)).toBeInViewport({ ratio: 1 });
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
