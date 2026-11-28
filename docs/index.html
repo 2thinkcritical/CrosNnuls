@@ -1,45 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tic-Tac-Toe · Canvas Game</title>
-  <meta name="description" content="Play Tic-Tac-Toe against a beatable computer on a rotating Canvas cube.">
-  <meta name="theme-color" content="#090e1b">
+  <title>Крестики-нолики под звёздами</title>
+  <meta name="description" content="Крестики-нолики на вращающемся кубе под ночным небом. Обыграйте компьютер.">
+  <meta name="theme-color" content="#0b1230">
   <link rel="stylesheet" href="styles.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%231d263e'/><path d='M21 21L43 43M43 21L21 43' stroke='%23ff80ab' stroke-width='6' stroke-linecap='round'/></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%23142152'/><path d='M21 21L43 43M43 21L21 43' stroke='%23ff8fc8' stroke-width='6' stroke-linecap='round'/></svg>">
 </head>
 <body>
   <canvas id="bg-canvas" aria-hidden="true"></canvas>
 
   <main class="game">
     <header class="game-heading">
-      <h1>Tic-Tac-Toe</h1>
-      <p class="players"><span><b class="player-x">X</b> You</span><span><b class="player-o">O</b> Computer</span></p>
+      <h1>Крестики-нолики</h1>
+      <p class="tagline">Обыграйте компьютер под звёздами</p>
     </header>
+
+    <p class="score" aria-label="Счёт">
+      <span class="score-side"><b class="mark-x" aria-hidden="true">✕</b> Вы <span class="score-value" id="score-x">0</span></span>
+      <span class="score-divider" aria-hidden="true">:</span>
+      <span class="score-side"><span class="score-value" id="score-o">0</span> Компьютер <b class="mark-o" aria-hidden="true">◯</b></span>
+    </p>
 
     <div class="board-stage">
       <canvas id="game-canvas" aria-hidden="true"></canvas>
-      <div id="board" class="board-grid" role="grid" aria-label="Tic-Tac-Toe board" aria-describedby="board-help"></div>
+      <div id="board" class="board-grid" role="grid" aria-label="Игровое поле" aria-describedby="board-help"></div>
     </div>
 
-    <section class="controls" aria-label="Game controls">
-      <p id="status-text" role="status" aria-atomic="true">Your turn</p>
-      <div class="buttons">
-        <button id="game-btn" type="button">Play again</button>
-        <button id="sound-btn" type="button" aria-pressed="false">Sound</button>
-      </div>
+    <section class="controls" aria-label="Управление игрой">
+      <p id="status-text" role="status" aria-atomic="true">Ваш ход</p>
       <p id="round-detail" aria-live="polite" aria-atomic="true"></p>
-      <p id="board-help">Arrow keys to move, Enter or Space to play.</p>
+      <div class="buttons">
+        <button id="game-btn" type="button">Новая игра</button>
+        <button id="sound-btn" class="icon-button" type="button" aria-pressed="false" aria-label="Звук" title="Звук">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>
+            <path class="wave" d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a7.8 7.8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path class="mute" d="M15.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <p id="board-help">Стрелки — выбор клетки, Enter или пробел — ход.</p>
     </section>
   </main>
 
   <dialog id="telegram-dialog" aria-labelledby="telegram-title" aria-describedby="telegram-help">
-    <h2 id="telegram-title">Play with Telegram</h2>
-    <p id="telegram-help">Connect a private chat to receive game results. Demo codes have no monetary value.</p>
+    <h2 id="telegram-title">Играть с Telegram</h2>
+    <p id="telegram-help">Подключите личный чат, чтобы получать результаты игр. Демо-коды не имеют денежной ценности.</p>
     <div class="buttons">
-      <button id="telegram-connect" type="button">Connect Telegram</button>
-      <button id="telegram-demo" type="button" autofocus>Play without Telegram</button>
+      <button id="telegram-connect" type="button">Подключить Telegram</button>
+      <button id="telegram-demo" type="button" autofocus>Играть без Telegram</button>
     </div>
     <p id="telegram-feedback" aria-live="polite"></p>
   </dialog>

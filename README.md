@@ -4,7 +4,7 @@
 
 **[Play the live demo](https://2thinkcritical.github.io/CrosNnuls/)**
 
-Play X against a beatable computer on a rotating cube drawn with the Canvas 2D API. The static game runs without an account, backend, or build step.
+Play X against a beatable computer on a rotating cube under a hand-coded night sky, all drawn with the Canvas 2D API. The interface is in Russian. The static game runs without an account, backend, or build step.
 
 ![A round of Canvas Tic-Tac-Toe in progress, with pink X and cyan O on the cube's front face](docs/preview.png)
 
@@ -18,7 +18,7 @@ cd CrosNnuls
 python3 -m http.server 8080 --bind 127.0.0.1 --directory docs
 ```
 
-Open [the local game](http://127.0.0.1:8080). Click or tap an empty square, or Tab to the board and use the arrow keys to move between cells. Enter and Space place your X. **Play again** starts a new round. The **Sound** toggle enables a short synthesized click. The game follows your system's reduced-motion setting.
+Open [the local game](http://127.0.0.1:8080). Click or tap an empty square, or Tab to the board and use the arrow keys to move between cells. Enter and Space place your X. **Новая игра** starts a new round and the score tracks wins for the session. The speaker button enables a short synthesized click. The game follows your system's reduced-motion setting.
 
 A win shows `DEMO-WIN`, a demonstration code with no redemption value. The opponent checks for wins and blocks but sometimes deliberately chooses another move.
 
@@ -29,14 +29,15 @@ A win shows `DEMO-WIN`, a demonstration code with no redemption value. The oppon
 | `docs/game.js` | Board controls, status announcements, turn scheduling, and resets |
 | `docs/rules.js` | Pure round transitions, winning lines, and the computer opponent |
 | `docs/geometry.js` | 3D rotation, 2D projection, and the matching transform for the HTML grid |
-| `docs/scene.js` | High-DPI Canvas rendering, animation, and the procedural starfield |
+| `docs/scene.js` | High-DPI Canvas rendering and animation of the cube |
 | `docs/audio.js` | Opt-in Web Audio tone synthesis |
 | `docs/telegram.js` | Optional connection dialog, session polling, and result delivery |
 | `docs/config.js` | Public Telegram settings, blank by default |
 | `docs/dom.js` | Typed lookup of required elements |
+| `docs/sky.js` | Procedurally painted night sky: Milky Way, moon, clouds, grass, twinkling and shooting stars |
 | `worker/index.js` | Optional Cloudflare Worker for the Telegram Bot API (not published with the site) |
 
-The front face is drawn in Canvas. An HTML grid of buttons follows the same projection, so pointer and keyboard input use the same nine targets. The stars and sound are generated in the browser from code in this repository.
+The front face is drawn in Canvas. An HTML grid of buttons follows the same projection, so pointer and keyboard input use the same nine targets. The sky and sound are generated in the browser from code in this repository; there are no image or audio files.
 
 ## Verify
 
