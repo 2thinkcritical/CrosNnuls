@@ -31,6 +31,22 @@ body {
   font-family: var(--ui);
 }
 
+/* The illustration stays anchored to the bottom-left, where the stargazer sits. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  /* Fallback for browsers without image-set(). */
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 45%, rgb(6 9 30 / 0.45), transparent 75%),
+    url("background.jpg") 18% 100% / cover no-repeat,
+    #0b1230;
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 45%, rgb(6 9 30 / 0.45), transparent 75%),
+    image-set(url("background.webp") type("image/webp"), url("background.jpg") type("image/jpeg")) 18% 100% / cover no-repeat,
+    #0b1230;
+}
+
 #bg-canvas {
   position: fixed;
   inset: 0;
@@ -285,4 +301,9 @@ button { font: inherit; }
   .score { grid-area: score; justify-self: center; }
   .controls { grid-area: controls; }
   .board-stage { grid-area: board; width: min(46vw, 82svh); }
+}
+
+/* Keyboard hints are noise on touch-only devices. */
+@media (hover: none) and (pointer: coarse) {
+  #board-help { display: none; }
 }
