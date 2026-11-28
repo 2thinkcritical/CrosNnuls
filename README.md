@@ -31,7 +31,7 @@ The computer always takes a winning move or blocks yours, except when it deliber
 | `docs/sky.js` | The night sky: Milky Way, moon, clouds, a stargazer on the hill, twinkling and shooting stars |
 | `docs/audio.js` | Opt-in Web Audio tone synthesis |
 | `docs/dom.js` | Typed lookup of required elements |
-| `docs/fonts/` | Self-hosted variable fonts under the SIL Open Font License |
+| `docs/fonts/` | Self-hosted Fredoka and Nunito variable fonts (SIL Open Font License) |
 
 The front face is drawn in Canvas. An invisible HTML grid of buttons follows the same projection, so mouse, touch and keyboard all use the same nine accessible targets. The sky is generated from a fixed seed, so it looks the same on every visit.
 
@@ -49,7 +49,3 @@ npm run test:browser
 ```
 
 The code is plain JavaScript, type-checked in strict mode by TypeScript through JSDoc annotations (`checkJs`) and linted with ESLint. The Node suite checks round rules and projection alignment. The Playwright suite plays real rounds in headless Chromium: turn order, rapid resets, keyboard navigation, touch on high-DPI screens, short and narrow viewports, reduced motion and the sound toggle. CI runs everything on each push and pull request.
-
-## Design preview
-
-Three typographic themes are available while the final look is chosen: [Starlight](https://2thinkcritical.github.io/CrosNnuls/?theme=starlight) (default), [Candy](https://2thinkcritical.github.io/CrosNnuls/?theme=candy) and [Cosmos](https://2thinkcritical.github.io/CrosNnuls/?theme=cosmos).
