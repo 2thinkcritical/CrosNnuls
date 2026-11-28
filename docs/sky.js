@@ -91,7 +91,7 @@ function paintStatic(ctx, width, height) {
 
   // On narrow or short screens the title covers the left of the sky, so the moon moves to the top corner.
   const narrow = width < 700 || height < 520;
-  paintMoon(ctx, width * (narrow ? 0.85 : 0.17), height * (narrow ? 0.055 : 0.2), Math.max(20, Math.min(width, height) * 0.045));
+  paintMoon(ctx, width * (narrow ? 0.13 : 0.17), height * (narrow ? 0.055 : 0.2), Math.max(20, Math.min(width, height) * 0.045));
 
   // Low clouds glowing above the horizon.
   for (let i = 0; i < 26; i++) {
@@ -101,6 +101,124 @@ function paintStatic(ctx, width, height) {
   }
 
   paintGrass(ctx, width, height, horizon, next);
+
+  // A stargazer sitting on the hill, off to the side so the game stays clear.
+  if (!narrow) {
+    const x = width * 0.8;
+    const size = Math.min(height * 0.17, 160);
+    paintStargazer(ctx, x, groundAt(x, width, height, horizon) + size * 0.02, size);
+    paintBlades(ctx, x - size * 0.5, x + size * 0.5, width, height, horizon, next, Math.round(size / 4));
+  }
+}
+
+/**
+ * Height of the rolling hill at ``x``.
+ * @param {number} x
+ * @param {number} width
+ * @param {number} height
+ * @param {number} horizon
+ */
+function groundAt(x, width, height, horizon) {
+  return horizon + Math.sin(x / width * 5.2) * height * 0.012 + height * 0.02;
+}
+
+/**
+ * A figure seen from behind, sitting on the hill and looking up at the sky.
+ * Moonlight from the upper left catches the left edge of the silhouette.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x centre of the figure
+ * @param {number} ground y of the hill under the figure
+ * @param {number} s figure height in pixels
+ */
+function paintStargazer(ctx, x, ground, s) {
+  ctx.save();
+  ctx.translate(x, ground);
+  ctx.scale(s, s);
+  glow(ctx, 0, -0.45, 1.1, 'rgba(150, 170, 255, 0.16)');
+
+  const outline = new Path2D();
+  // Torso, shoulders and neck.
+  outline.moveTo(-0.3, 0);
+  {
+    const path = outline;
+    path.bezierCurveTo(-0.31, -0.12, -0.22, -0.2, -0.18, -0.3);
+    path.bezierCurveTo(-0.17, -0.4, -0.25, -0.46, -0.24, -0.53);
+    path.bezierCurveTo(-0.23, -0.59, -0.15, -0.61, -0.07, -0.63);
+    path.lineTo(-0.055, -0.7);
+    path.lineTo(0.055, -0.7);
+    path.lineTo(0.07, -0.63);
+    path.bezierCurveTo(0.15, -0.61, 0.23, -0.59, 0.24, -0.53);
+    path.bezierCurveTo(0.25, -0.46, 0.17, -0.4, 0.18, -0.3);
+    path.bezierCurveTo(0.22, -0.2, 0.31, -0.12, 0.3, 0);
+    path.closePath();
+  }
+  // Head, tilted slightly back toward the sky.
+  outline.ellipse(0, -0.8, 0.105, 0.12, -0.12, 0, Math.PI * 2);
+  // Arms resting on the knees in front, visible as bulges at the sides.
+  outline.ellipse(-0.27, -0.27, 0.07, 0.2, 0.25, 0, Math.PI * 2);
+  outline.ellipse(0.27, -0.27, 0.07, 0.2, -0.25, 0, Math.PI * 2);
+
+  // Long hair falling over the back, ending in loose strands.
+  const hair = new Path2D();
+  hair.moveTo(-0.1, -0.86);
+  hair.bezierCurveTo(-0.17, -0.72, -0.15, -0.56, -0.13, -0.4);
+  hair.lineTo(-0.09, -0.36);
+  hair.lineTo(-0.05, -0.41);
+  hair.lineTo(-0.01, -0.35);
+  hair.lineTo(0.04, -0.41);
+  hair.lineTo(0.08, -0.36);
+  hair.lineTo(0.12, -0.42);
+  hair.bezierCurveTo(0.15, -0.56, 0.16, -0.72, 0.1, -0.86);
+  hair.closePath();
+
+  ctx.fillStyle = '#070a1d';
+  ctx.fill(outline);
+  ctx.fillStyle = '#0b0f28';
+  ctx.fill(hair);
+
+  // Rim light along the moonlit edge.
+  ctx.strokeStyle = 'rgba(206, 190, 255, 0.8)';
+  ctx.lineWidth = 0.014;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.ellipse(0, -0.8, 0.105, 0.12, -0.12, Math.PI * 1.02, Math.PI * 1.62);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-0.1, -0.86);
+  ctx.bezierCurveTo(-0.17, -0.72, -0.15, -0.56, -0.13, -0.42);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-0.15, -0.61);
+  ctx.bezierCurveTo(-0.22, -0.59, -0.25, -0.54, -0.3, -0.45);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Grass blades between ``from`` and ``to``, drawn in front of the figure.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} from
+ * @param {number} to
+ * @param {number} width
+ * @param {number} height
+ * @param {number} horizon
+ * @param {() => number} next
+ * @param {number} count
+ */
+function paintBlades(ctx, from, to, width, height, horizon, next, count) {
+  ctx.strokeStyle = '#0a1029';
+  ctx.lineCap = 'round';
+  for (let i = 0; i < count; i++) {
+    const x = from + next() * (to - from);
+    const base = groundAt(x, width, height, horizon) + height * 0.006;
+    const tall = height * (0.008 + next() ** 2 * 0.03);
+    const lean = (next() - 0.35) * tall * 0.8;
+    ctx.lineWidth = 0.8 + next() * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x, base);
+    ctx.quadraticCurveTo(x + lean * 0.3, base - tall * 0.6, x + lean, base - tall);
+    ctx.stroke();
+  }
 }
 
 /**

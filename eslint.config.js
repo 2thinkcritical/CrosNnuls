@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['node_modules/', '.wrangler/', '.worker-build/', 'playwright-report/', 'test-results/'] },
+  { ignores: ['node_modules/', 'playwright-report/', 'test-results/'] },
   js.configs.recommended,
   {
     rules: {
@@ -14,7 +14,6 @@ export default [
     },
   },
   { files: ['docs/**/*.js'], languageOptions: { globals: globals.browser } },
-  { files: ['worker/**/*.js'], languageOptions: { globals: globals.serviceworker } },
   { files: ['tests/**', '*.config.js'], languageOptions: { globals: globals.node } },
   { files: ['tests/browser/**'], languageOptions: { globals: { ...globals.node, ...globals.browser } } },
 ];
