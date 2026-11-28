@@ -1,2 +1,4 @@
 # Copy to .dev.vars for local Wrangler development. Never commit the real file.
-BOT_TOKEN=replace-with-a-new-token-from-botfather
+BOT_TOKEN=token-of-a-dedicated-demo-bot
+# Generate with: openssl rand -hex 32
+RECEIPT_SECRET=
