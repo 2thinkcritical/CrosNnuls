@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test';
 
 const status = page => page.getByRole('status');
+const MARK = { X: 'крестик', O: 'нолик', empty: 'пусто' };
 const square = (page, row, column, mark = 'empty') =>
-  page.getByRole('button', { name: `Row ${row}, column ${column}: ${mark}`, exact: true });
+  page.getByRole('button', { name: `Ряд ${row}, столбец ${column}: ${MARK[mark]}`, exact: true });
 
 async function openGame(page) {
   // A low random draw makes the fallible opponent always choose the first empty square.
@@ -34,7 +35,7 @@ test.afterEach(({}, testInfo) => {
 
 test('a complete pointer round respects turn order, occupied squares and a terminal win', async ({ page }) => {
   await openGame(page);
-  await expect(status(page)).toHaveText('Your turn');
+  await expect(status(page)).toHaveText('Ваш ход');
   await square(page, 1, 1).click();
   await square(page, 2, 3).click({ force: true }); // Attempt a second move during the computer turn.
   await expect(square(page, 1, 2, 'O')).toBeVisible();
@@ -46,7 +47,7 @@ test('a complete pointer round respects turn order, occupied squares and a termi
   await expect(square(page, 1, 3, 'O')).toBeVisible();
   await square(page, 3, 3).click();
 
-  await expect(status(page)).toHaveText('You win!');
+  await expect(status(page)).toHaveText('Вы победили!');
   await expect(page.locator('#round-detail')).toContainText('DEMO-WIN');
   await square(page, 3, 1).click({ force: true });
   await expect(square(page, 3, 1)).toBeVisible();
@@ -57,14 +58,14 @@ test('quick reset cancels the pending computer move and any earlier rotation', a
   await page.clock.install();
   await openGame(page);
   await square(page, 1, 1).click();
-  await expect(status(page)).toHaveText('Computer is thinking…');
-  await page.getByRole('button', { name: 'Play again' }).click();
+  await expect(status(page)).toHaveText('Компьютер думает…');
+  await page.getByRole('button', { name: 'Новая игра' }).click();
   await page.clock.runFor(100);
-  await page.getByRole('button', { name: 'Play again' }).click();
+  await page.getByRole('button', { name: 'Новая игра' }).click();
   await page.clock.runFor(800);
 
-  await expect(page.getByRole('button', { name: /column \d: empty/ })).toHaveCount(9);
-  await expect(status(page)).toHaveText('Your turn');
+  await expect(page.getByRole('button', { name: /столбец \d: пусто/ })).toHaveCount(9);
+  await expect(status(page)).toHaveText('Ваш ход');
   await square(page, 2, 2).click();
   await page.clock.runFor(800);
   await expect(square(page, 2, 2, 'X')).toBeVisible();
@@ -85,7 +86,7 @@ test('keyboard enters the grid once, navigates the cells, and activates using En
   await page.keyboard.press('Space');
   await expect(square(page, 3, 2, 'X')).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Play again' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Новая игра' })).toBeFocused();
 });
 
 test('short screens keep the complete board and controls in the viewport', async ({ page }) => {
@@ -106,7 +107,7 @@ test.describe('narrow touch layouts', () => {
     await openGame(page);
     const canvas = page.locator('#game-canvas');
     await expect(canvas).toBeInViewport({ ratio: 1 });
-    await expect(page.getByRole('button', { name: 'Play again' })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole('button', { name: 'Новая игра' })).toBeInViewport({ ratio: 1 });
     const rect = await canvas.boundingBox();
     expect(Math.abs(await canvas.evaluate(element => element.width) - rect.width * 2)).toBeLessThanOrEqual(1);
     await page.touchscreen.tap(rect.x + rect.width * 0.391, rect.y + rect.height * 0.57);
@@ -135,7 +136,7 @@ test('reduced motion draws the move immediately and keeps the reset board still'
   await page.clock.runFor(250); // Between the player move and the computer response.
   expect(await pixels()).toBe(firstFrame);
 
-  await page.getByRole('button', { name: 'Play again' }).click();
+  await page.getByRole('button', { name: 'Новая игра' }).click();
   const resetFrame = await pixels();
   await page.clock.runFor(250);
   expect(await pixels()).toBe(resetFrame);
@@ -173,12 +174,12 @@ test('Telegram connection uses a signed receipt and reports a failed delivery', 
   });
   await openGame(page);
   await expect(page.getByRole('dialog')).toBeVisible();
-  await page.getByRole('button', { name: 'Connect Telegram' }).click();
+  await page.getByRole('button', { name: 'Подключить Telegram' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   expect(session).toMatch(/^[a-f0-9]{32}$/);
   expect(await page.evaluate(() => window.openedBot)).toBe(`https://t.me/demo_bot?start=${session}`);
   await winRound(page);
-  await expect(page.locator('#round-detail')).toContainText('Telegram delivery failed');
+  await expect(page.locator('#round-detail')).toContainText('не удалось отправить в Telegram');
   expect(resultRequests).toEqual([{ receipt: 'signed-demo-receipt', result: 'win' }]);
 });
 
@@ -192,16 +193,16 @@ test('a late Telegram delivery cannot write a result into a fresh round', async 
     respond = () => route.fulfill({ json: { ok: true } });
   });
   await openGame(page);
-  await page.getByRole('button', { name: 'Connect Telegram' }).click();
+  await page.getByRole('button', { name: 'Подключить Telegram' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   await winRound(page);
   await expect.poll(() => Boolean(respond)).toBe(true);
 
-  await page.getByRole('button', { name: 'Play again' }).click();
+  await page.getByRole('button', { name: 'Новая игра' }).click();
   const response = page.waitForResponse('https://adapter.test/send');
   await respond();
   await (await response).finished();
-  await expect(status(page)).toHaveText('Your turn');
+  await expect(status(page)).toHaveText('Ваш ход');
   await expect(page.locator('#round-detail')).toBeEmpty();
 });
 
@@ -218,7 +219,7 @@ test('the player can dismiss the optional dialog with Escape and play immediatel
 
 test('sound is opt-in and can be muted again using the same control', async ({ page }) => {
   await openGame(page);
-  const sound = page.getByRole('button', { name: 'Sound' });
+  const sound = page.getByRole('button', { name: 'Звук' });
   await expect(sound).toHaveAttribute('aria-pressed', 'false');
   await sound.click();
   await expect(sound).toHaveAttribute('aria-pressed', 'true');
@@ -229,8 +230,8 @@ test('sound is opt-in and can be muted again using the same control', async ({ p
 test('the live region identifies the computer move', async ({ page }) => {
   await openGame(page);
   await square(page, 1, 1).click();
-  await expect(status(page)).toContainText('Computer played row 1, column 2');
-  await expect(status(page)).toContainText('Your turn');
+  await expect(status(page)).toContainText('Компьютер: ряд 1, столбец 2');
+  await expect(status(page)).toContainText('Ваш ход');
 });
 
 test('an expired Telegram receipt can reconnect without reloading', async ({ page }, testInfo) => {
@@ -247,16 +248,16 @@ test('an expired Telegram receipt can reconnect without reloading', async ({ pag
     return route.fulfill({ status: receipts.length === 1 ? 401 : 200, json: receipts.length === 1 ? { error: 'expired' } : { ok: true } });
   });
   await openGame(page);
-  await page.getByRole('button', { name: 'Connect Telegram' }).click();
+  await page.getByRole('button', { name: 'Подключить Telegram' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
   await winRound(page);
   await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.locator('#telegram-feedback')).toContainText('expired');
-  await page.getByRole('button', { name: 'Connect Telegram' }).click();
+  await expect(page.locator('#telegram-feedback')).toContainText('истекла');
+  await page.getByRole('button', { name: 'Подключить Telegram' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
-  await page.getByRole('button', { name: 'Play again' }).click();
+  await page.getByRole('button', { name: 'Новая игра' }).click();
   await winRound(page);
-  await expect(page.locator('#round-detail')).toHaveText('Result sent to Telegram.');
+  await expect(page.locator('#round-detail')).toHaveText('Результат отправлен в Telegram.');
   expect(receipts).toEqual(['expired-receipt', 'fresh-receipt']);
   // Chromium reports the deliberately mocked 401 as a resource error.
   const expected401 = testInfo.errorsFromPage.filter(text => text.includes('401 (Unauthorized)'));

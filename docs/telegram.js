@@ -58,7 +58,7 @@ export function createTelegramConnection(config, dialog, onClose) {
     const session = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 
     connectButton.disabled = true;
-    feedback.textContent = 'Press Start in Telegram, then return here.';
+    feedback.textContent = 'Нажмите «Старт» в Telegram и вернитесь сюда.';
     window.open(`https://t.me/${encodeURIComponent(bot)}?start=${session}`, '_blank', 'noopener,noreferrer');
     demoButton.focus();
 
@@ -70,7 +70,7 @@ export function createTelegramConnection(config, dialog, onClose) {
         const data = await response.json();
         if (signal.aborted || !dialog.open) return;
         if (!response.ok || data.error) {
-          feedback.textContent = 'Telegram is unavailable. Try again or continue in demo mode.';
+          feedback.textContent = 'Telegram недоступен. Попробуйте ещё раз или играйте без него.';
           connectButton.disabled = false;
           return;
         }
@@ -85,7 +85,7 @@ export function createTelegramConnection(config, dialog, onClose) {
       if (attempt + 1 < MAX_CHECKS) await waitForNextCheck(signal);
     }
     if (signal.aborted || !dialog.open) return;
-    feedback.textContent = 'Connection timed out. Try again or continue in demo mode.';
+    feedback.textContent = 'Время ожидания вышло. Попробуйте ещё раз или играйте без Telegram.';
     connectButton.disabled = false;
   });
 
@@ -105,7 +105,7 @@ export function createTelegramConnection(config, dialog, onClose) {
         if (response.status === 401 && receipt === sendingReceipt) {
           receipt = null;
           connectButton.disabled = false;
-          feedback.textContent = 'Your Telegram session expired. Reconnect or continue in demo mode.';
+          feedback.textContent = 'Сессия Telegram истекла. Подключитесь заново или играйте без Telegram.';
           if (!dialog.open) dialog.showModal();
           connectButton.focus();
           return false;
