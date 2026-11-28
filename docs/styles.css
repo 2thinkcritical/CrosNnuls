@@ -33,18 +33,22 @@ body {
 
 /* The illustration stays anchored to the bottom-left, where the stargazer sits. */
 body::before {
+  --scrim: radial-gradient(ellipse 60% 55% at 50% 45%, rgb(6 9 30 / 0.45), transparent 75%);
+  --focus-x: 12%;
   content: "";
   position: fixed;
   inset: 0;
-  /* Fallback for browsers without image-set(). */
+  /* Fallback for browsers without image-set(). The WebP is lossless. */
+  background: var(--scrim), url("background.jpg") var(--focus-x) 100% / cover no-repeat, #0b1230;
   background:
-    radial-gradient(ellipse 60% 55% at 50% 45%, rgb(6 9 30 / 0.45), transparent 75%),
-    url("background.jpg") 18% 100% / cover no-repeat,
+    var(--scrim),
+    image-set(url("background.webp") type("image/webp"), url("background.jpg") type("image/jpeg")) var(--focus-x) 100% / cover no-repeat,
     #0b1230;
-  background:
-    radial-gradient(ellipse 60% 55% at 50% 45%, rgb(6 9 30 / 0.45), transparent 75%),
-    image-set(url("background.webp") type("image/webp"), url("background.jpg") type("image/jpeg")) 18% 100% / cover no-repeat,
-    #0b1230;
+}
+
+/* Narrow screens crop the sides; keep the stargazer in frame. */
+@media (max-width: 900px) {
+  body::before { --focus-x: 9%; }
 }
 
 #bg-canvas {
