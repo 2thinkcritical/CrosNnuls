@@ -1,8 +1,8 @@
 # Tic-Tac-Toe Under the Stars
 
-[![CI](https://github.com/2thinkcritical/CrosNnuls/actions/workflows/ci.yml/badge.svg)](https://github.com/2thinkcritical/CrosNnuls/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![CI](https://github.com/2thinkcritical/tic-tac-toe-under-the-stars/actions/workflows/ci.yml/badge.svg)](https://github.com/2thinkcritical/tic-tac-toe-under-the-stars/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**[Play it live](https://2thinkcritical.github.io/CrosNnuls/)**
+**[Play it live](https://2thinkcritical.github.io/tic-tac-toe-under-the-stars/)**
 
 Play X against a beatable computer on a rotating cube under a starry sky. There is no framework and no build step: just ES modules and the Canvas 2D API.
 
@@ -11,8 +11,8 @@ Play X against a beatable computer on a rotating cube under a starry sky. There 
 ## Play locally
 
 ```sh
-git clone https://github.com/2thinkcritical/CrosNnuls.git
-cd CrosNnuls
+git clone https://github.com/2thinkcritical/tic-tac-toe-under-the-stars.git
+cd tic-tac-toe-under-the-stars
 python3 -m http.server 8080 --bind 127.0.0.1 --directory docs
 ```
 
