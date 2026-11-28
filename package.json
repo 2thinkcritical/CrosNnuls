@@ -15,11 +15,11 @@
     "start": "python3 -m http.server 8080 --bind 127.0.0.1 --directory docs"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.5",
-    "@playwright/test": "1.61.1",
-    "eslint": "9.39.5",
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.1",
+    "eslint": "10.15.0",
     "globals": "17.14.0",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   },
   "license": "MIT"
 }
