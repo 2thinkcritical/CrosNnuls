@@ -69,16 +69,17 @@ export function createSound(button) {
     }
   }
 
-  async function turnOn() {
+  /**
+   * Starts the music. play() and resume() are called synchronously inside the
+   * click: browsers with strict autoplay rules (Brave, Safari) reject playback
+   * that starts after an await.
+   */
+  function turnOn() {
     const { context, music, gain } = audioGraph();
     clearTimeout(pauseTimer);
-    try {
-      if (context.state !== 'running') await context.resume();
-      await music.play();
-      if (enabled) fade(gain, MUSIC_VOLUME);
-    } catch {
-      // Playback can be refused (no audio device, blocked by the browser).
-    }
+    Promise.all([context.resume(), music.play()])
+      .then(() => { if (enabled) fade(gain, MUSIC_VOLUME); })
+      .catch(error => console.warn('Music could not start:', error));
     void click();
   }
 
@@ -93,7 +94,7 @@ export function createSound(button) {
   button.addEventListener('click', () => {
     enabled = !enabled;
     button.setAttribute('aria-pressed', String(enabled));
-    if (enabled) void turnOn();
+    if (enabled) turnOn();
     else turnOff();
   });
   return { click };
