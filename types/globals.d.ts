@@ -1,10 +1,4 @@
-/** Public browser settings from docs/config.js. Blank values mean standalone play. */
-interface TicTacToeConfig {
-  readonly WORKER_URL: string;
-  readonly BOT_USERNAME: string;
-}
-
+/** Safari before 14.1 exposes Web Audio under a prefixed name. */
 interface Window {
-  TICTACTOE_CONFIG?: TicTacToeConfig;
   webkitAudioContext?: typeof AudioContext;
 }

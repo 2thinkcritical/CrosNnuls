@@ -1,16 +1,14 @@
-# Canvas Tic-Tac-Toe
+# Tic-Tac-Toe Under the Stars
 
 [![CI](https://github.com/2thinkcritical/CrosNnuls/actions/workflows/ci.yml/badge.svg)](https://github.com/2thinkcritical/CrosNnuls/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**[Play the live demo](https://2thinkcritical.github.io/CrosNnuls/)**
+**[Play it live](https://2thinkcritical.github.io/CrosNnuls/)**
 
-Play X against a beatable computer on a rotating cube under a hand-coded night sky, all drawn with the Canvas 2D API. The interface is in Russian. The static game runs without an account, backend, or build step.
+Play X against a beatable computer on a rotating cube, under a night sky painted entirely in code. There is no framework, no build step and no image or audio files: just ES modules and the Canvas 2D API.
 
-![A round of Canvas Tic-Tac-Toe in progress, with pink X and cyan O on the cube's front face](docs/preview.png)
+![A round in progress: neon X and O marks on a violet cube under a starry sky with a crescent moon](docs/preview.png)
 
 ## Play locally
-
-Requires Python 3 for the static file server.
 
 ```sh
 git clone https://github.com/2thinkcritical/CrosNnuls.git
@@ -18,30 +16,28 @@ cd CrosNnuls
 python3 -m http.server 8080 --bind 127.0.0.1 --directory docs
 ```
 
-Open [the local game](http://127.0.0.1:8080). Click or tap an empty square, or Tab to the board and use the arrow keys to move between cells. Enter and Space place your X. **Новая игра** starts a new round and the score tracks wins for the session. The speaker button enables a short synthesized click. The game follows your system's reduced-motion setting.
+Open http://127.0.0.1:8080. Click or tap an empty square, or Tab to the board and use the arrow keys; Enter and Space place your X. **New game** starts a fresh round and the score counts wins for the session. The speaker button in the corner turns on a short synthesized click. The game respects your system's reduced-motion setting.
 
-A win shows `DEMO-WIN`, a demonstration code with no redemption value. The opponent checks for wins and blocks but sometimes deliberately chooses another move.
+The computer always takes a winning move or blocks yours, except when it deliberately slips: 30% of its moves are random, and it misses some wins and blocks on purpose, so it can be beaten.
 
 ## How it works
 
 | Path | Responsibility |
 | --- | --- |
-| `docs/game.js` | Board controls, status announcements, turn scheduling, and resets |
-| `docs/rules.js` | Pure round transitions, winning lines, and the computer opponent |
-| `docs/geometry.js` | 3D rotation, 2D projection, and the matching transform for the HTML grid |
+| `docs/game.js` | Board controls, status announcements, turn scheduling, score and resets |
+| `docs/rules.js` | Pure round transitions, winning lines and the computer opponent |
+| `docs/geometry.js` | 3D rotation, 2D projection and the matching transform for the HTML grid |
 | `docs/scene.js` | High-DPI Canvas rendering and animation of the cube |
+| `docs/sky.js` | The night sky: Milky Way, moon, clouds, a stargazer on the hill, twinkling and shooting stars |
 | `docs/audio.js` | Opt-in Web Audio tone synthesis |
-| `docs/telegram.js` | Optional connection dialog, session polling, and result delivery |
-| `docs/config.js` | Public Telegram settings, blank by default |
 | `docs/dom.js` | Typed lookup of required elements |
-| `docs/sky.js` | Procedurally painted night sky: Milky Way, moon, clouds, grass, twinkling and shooting stars |
-| `worker/index.js` | Optional Cloudflare Worker for the Telegram Bot API (not published with the site) |
+| `docs/fonts/` | Self-hosted variable fonts under the SIL Open Font License |
 
-The front face is drawn in Canvas. An HTML grid of buttons follows the same projection, so pointer and keyboard input use the same nine targets. The sky and sound are generated in the browser from code in this repository; there are no image or audio files.
+The front face is drawn in Canvas. An invisible HTML grid of buttons follows the same projection, so mouse, touch and keyboard all use the same nine accessible targets. The sky is generated from a fixed seed, so it looks the same on every visit.
 
 ## Verify
 
-Requires Node.js 22.12+ and Python 3. The browser suite launches an isolated headless Chromium against the local static site.
+Requires Node.js 22.12+ and Python 3.
 
 ```sh
 npm ci
@@ -49,27 +45,11 @@ npx playwright install --only-shell chromium
 npm run lint
 npm run typecheck
 npm test
-npm run worker:check
 npm run test:browser
 ```
 
-The code is plain ES modules with no build step. It is type-checked in strict mode by TypeScript through JSDoc annotations (`checkJs`), and linted with ESLint. The Node suite checks round rules, projection alignment, and the Worker HTTP contract. The Playwright suite checks a legal round, rapid resets, keyboard navigation, touch, high-DPI rendering, short viewports, reduced motion, and the optional Telegram flow with network fixtures. CI runs both suites and validates the Worker bundle on pushes and pull requests. The test run uses no bot token and sends no Telegram messages.
+The code is plain JavaScript, type-checked in strict mode by TypeScript through JSDoc annotations (`checkJs`) and linted with ESLint. The Node suite checks round rules and projection alignment. The Playwright suite plays real rounds in headless Chromium: turn order, rapid resets, keyboard navigation, touch on high-DPI screens, short and narrow viewports, reduced motion and the sound toggle. CI runs everything on each push and pull request.
 
-## Optional Telegram integration
+## Design preview
 
-Follow [the deployment guide](DEPLOY.md) to connect a bot. Keep the public settings in `docs/config.js` blank for standalone play. Store `BOT_TOKEN` and the receipt-signing `RECEIPT_SECRET` in Worker secrets or an ignored local `.dev.vars` file.
-
-```text
-Browser ── /check?session=<random ID> ──► Worker ──► Telegram getUpdates
-        ◄── short-lived signed receipt ──┘
-Browser ── /send {receipt, result} ─────► Worker ──► fixed result message
-```
-
-The Worker matches the `/start` payload in a private chat and issues a signed receipt that expires after ten minutes. The receipt determines the destination chat, and the Worker selects the message from fixed result text.
-
-## Scope and limitations
-
-- Results come from the browser, so the integration is suitable for demo notifications. A game result does not establish that someone won fairly.
-- The demo Worker checks at most the earliest 100 pending Telegram updates and leaves them unconfirmed. Older entries can prevent discovery of new ones. Use a dedicated, low-traffic bot without another polling consumer or webhook.
-- Signed receipts can be replayed until they expire, and a pending `/start` can issue another receipt. A production integration would need durable sessions, replay protection, rate limiting, and a webhook.
-- Automated browser coverage uses Chromium, including mobile emulation.
+Three typographic themes are available while the final look is chosen: [Starlight](https://2thinkcritical.github.io/CrosNnuls/?theme=starlight) (default), [Candy](https://2thinkcritical.github.io/CrosNnuls/?theme=candy) and [Cosmos](https://2thinkcritical.github.io/CrosNnuls/?theme=cosmos).

@@ -4,20 +4,18 @@ import { BOARD_SIZE } from './geometry.js';
 import { chooseComputerMove, newRound, placeMark } from './rules.js';
 import { createScene } from './scene.js';
 import { createSky } from './sky.js';
-import { createTelegramConnection } from './telegram.js';
-
-const COMPUTER_DELAY = 450;
-const OUTCOME_LABEL = { X: 'Вы победили!', O: 'Победил компьютер', draw: 'Ничья' };
-const MARK_LABEL = { X: 'крестик', O: 'нолик' };
 
 /** @typedef {import('./rules.js').Mark} Mark */
-/** @typedef {import('./rules.js').Round} Round */
+
+const COMPUTER_DELAY = 450;
+const OUTCOME_LABEL = { X: 'You win!', O: 'The computer wins', draw: "It's a draw" };
 
 const grid = element('#board', HTMLElement);
 const status = element('#status-text', HTMLElement);
-const detail = element('#round-detail', HTMLElement);
 const reset = element('#game-btn', HTMLButtonElement);
 const sound = createSound(element('#sound-btn', HTMLButtonElement));
+const score = { X: element('#score-x', HTMLElement), O: element('#score-o', HTMLElement) };
+const wins = { X: 0, O: 0 };
 /** @type {HTMLButtonElement[]} */
 const squares = [];
 let activeSquare = 0;
@@ -26,8 +24,6 @@ let round = newRound();
 let computerTimer;
 const scene = createScene(element('#game-canvas', HTMLCanvasElement), grid, round);
 createSky(element('#bg-canvas', HTMLCanvasElement));
-const score = { X: element('#score-x', HTMLElement), O: element('#score-o', HTMLElement) };
-const wins = { X: 0, O: 0 };
 
 grid.style.setProperty('--board-size', `${BOARD_SIZE}px`);
 for (let row = 0; row < 3; row++) {
@@ -51,12 +47,6 @@ for (let row = 0; row < 3; row++) {
     squares.push(button);
   }
 }
-
-const telegram = createTelegramConnection(
-  window.TICTACTOE_CONFIG,
-  element('#telegram-dialog', HTMLDialogElement),
-  () => squares[activeSquare].focus(),
-);
 
 /** @param {number} index */
 function setActiveSquare(index) {
@@ -83,34 +73,15 @@ grid.addEventListener('keydown', event => {
 /** @param {{ reset?: boolean, rotate?: boolean }} [options] */
 function render(options) {
   for (const [index, square] of squares.entries()) {
-    const row = Math.floor(index / 3) + 1;
-    const column = index % 3 + 1;
     const mark = round.board[index];
-    square.setAttribute('aria-label', `Ряд ${row}, столбец ${column}: ${mark ? MARK_LABEL[mark] : 'пусто'}`);
+    square.setAttribute('aria-label', `Row ${Math.floor(index / 3) + 1}, column ${index % 3 + 1}: ${mark || 'empty'}`);
     square.setAttribute('aria-disabled', String(round.turn !== 'X' || Boolean(mark)));
   }
-
   const result = round.outcome?.result;
   status.dataset.result = result ?? '';
   status.textContent = result ? OUTCOME_LABEL[result]
-    : round.turn === 'X' ? 'Ваш ход' : 'Компьютер думает…';
+    : round.turn === 'X' ? 'Your turn' : 'Computer is thinking…';
   scene.show(round, options);
-}
-
-/** @param {Round} finished a round with an outcome */
-async function reportOutcome(finished) {
-  if (!finished.outcome) return;
-  const { result } = finished.outcome;
-  if (result === 'draw') return;
-  wins[result] += 1;
-  score[result].textContent = String(wins[result]);
-  if (result === 'X') detail.textContent = 'Демо-код: DEMO-WIN';
-  if (!telegram?.connected) return;
-
-  const delivered = await telegram.send(result === 'X' ? 'win' : 'loss');
-  if (round !== finished) return;
-  detail.textContent = delivered ? 'Результат отправлен в Telegram.'
-    : result === 'X' ? 'Демо-код: DEMO-WIN · не удалось отправить в Telegram.' : 'Не удалось отправить в Telegram.';
 }
 
 /**
@@ -126,9 +97,13 @@ function move(index, mark) {
   round = next;
   render();
   if (mark === 'O') {
-    status.textContent = `Компьютер: ряд ${Math.floor(index / 3) + 1}, столбец ${index % 3 + 1}. ${status.textContent}`;
+    status.textContent = `Computer played row ${Math.floor(index / 3) + 1}, column ${index % 3 + 1}. ${status.textContent}`;
   }
-  if (round.outcome) void reportOutcome(round);
+  const result = round.outcome?.result;
+  if (result === 'X' || result === 'O') {
+    wins[result] += 1;
+    score[result].textContent = String(wins[result]);
+  }
   return true;
 }
 
@@ -148,7 +123,6 @@ function playerMove(index) {
 reset.addEventListener('click', () => {
   clearTimeout(computerTimer);
   round = newRound();
-  detail.textContent = '';
   setActiveSquare(0);
   void sound.click();
   render({ reset: true, rotate: true });
