@@ -29,7 +29,7 @@ The computer always takes a winning move or blocks yours, except when it deliber
 | `docs/geometry.js` | 3D rotation, 2D projection and the matching transform for the HTML grid |
 | `docs/scene.js` | High-DPI Canvas rendering and animation of the cube |
 | `docs/sky.js` | Animated layer over the illustration: twinkling and shooting stars |
-| `docs/background.webp` | Background illustration, with a JPEG fallback |
+| `docs/background.webp` | Background illustration at full resolution, lossless, with a JPEG fallback |
 | `docs/audio.js` | Opt-in background music with fades and a synthesized click (Web Audio) |
 | `docs/music.m4a` | Background track, made with [Suno](https://suno.com) |
 | `docs/dom.js` | Typed lookup of required elements |
