@@ -16,7 +16,7 @@ cd CrosNnuls
 python3 -m http.server 8080 --bind 127.0.0.1 --directory docs
 ```
 
-Open http://127.0.0.1:8080. Click or tap an empty square, or Tab to the board and use the arrow keys; Enter and Space place your X. **New game** starts a fresh round and the score counts wins for the session. The speaker button in the corner turns on a short synthesized click. The game respects your system's reduced-motion setting.
+Open http://127.0.0.1:8080. Click or tap an empty square, or Tab to the board and use the arrow keys; Enter and Space place your X. **New game** starts a fresh round and the score counts wins for the session. The speaker button in the corner turns on background music and a short synthesized click on each move; the music file is only downloaded once you turn sound on. The game respects your system's reduced-motion setting.
 
 The computer always takes a winning move or blocks yours, except when it deliberately slips: 30% of its moves are random, and it misses some wins and blocks on purpose, so it can be beaten.
 
@@ -30,11 +30,12 @@ The computer always takes a winning move or blocks yours, except when it deliber
 | `docs/scene.js` | High-DPI Canvas rendering and animation of the cube |
 | `docs/sky.js` | Animated layer over the illustration: twinkling and shooting stars |
 | `docs/background.webp` | Background illustration, with a JPEG fallback |
-| `docs/audio.js` | Opt-in Web Audio tone synthesis |
+| `docs/audio.js` | Opt-in background music with fades and a synthesized click (Web Audio) |
+| `docs/music.m4a` | Background track, made with [Suno](https://suno.com) |
 | `docs/dom.js` | Typed lookup of required elements |
 | `docs/fonts/` | Self-hosted Fredoka and Nunito variable fonts (SIL Open Font License) |
 
-The front face is drawn in Canvas. An invisible HTML grid of buttons follows the same projection, so mouse, touch and keyboard all use the same nine accessible targets. Sound is synthesized in the browser, so there are no audio files.
+The front face is drawn in Canvas. An invisible HTML grid of buttons follows the same projection, so mouse, touch and keyboard all use the same nine accessible targets. The move click is synthesized in the browser; volume runs through a Web Audio gain node so fades also work on iOS.
 
 ## Verify
 
