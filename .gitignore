@@ -1,17 +1,4 @@
-# Dependencies and local Worker tooling
 node_modules/
-.wrangler/
-.worker-build/
-
-# Local credentials
-.dev.vars
-.dev.vars.*
-!.dev.vars.example
-.env
-.env.*
-
-# Browser test output
 playwright-report/
 test-results/
-
 .DS_Store
