@@ -14,17 +14,17 @@ const MOVE_DURATION = 175;
 const RESET_DURATION = 460;
 const TAU = 2 * Math.PI;
 /** @type {Record<Mark, string>} */
-const INK = { X: '#ff80ab', O: '#76e8ef' };
+const INK = { X: '#ff8fc8', O: '#8ff0ff' };
 
 // Axes in the plane of each face, with brighter fills on the lit sides.
 /** @type {Face[]} */
 const FACES = [
-  { normal: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], fill: '#1d263e', board: true },
-  { normal: [0, 0, -1], u: [1, 0, 0], v: [0, 1, 0], fill: '#1a2337' },
-  { normal: [0, 1, 0], u: [1, 0, 0], v: [0, 0, 1], fill: '#26334e' },
-  { normal: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1], fill: '#141d31' },
-  { normal: [1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], fill: '#141e34' },
-  { normal: [-1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], fill: '#212b44' },
+  { normal: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], fill: 'rgba(28, 32, 78, 0.92)', board: true },
+  { normal: [0, 0, -1], u: [1, 0, 0], v: [0, 1, 0], fill: 'rgba(22, 26, 64, 0.92)' },
+  { normal: [0, 1, 0], u: [1, 0, 0], v: [0, 0, 1], fill: 'rgba(52, 50, 112, 0.92)' },
+  { normal: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1], fill: 'rgba(16, 20, 50, 0.92)' },
+  { normal: [1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], fill: 'rgba(20, 24, 60, 0.92)' },
+  { normal: [-1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], fill: 'rgba(40, 42, 96, 0.92)' },
 ];
 
 /**
@@ -67,11 +67,11 @@ function drawFace(ctx, face, transform) {
 
   ctx.fillStyle = face.fill;
   ctx.fill();
-  ctx.strokeStyle = face.board ? '#8c9dbc' : '#506682';
+  ctx.strokeStyle = face.board ? '#b9a8ff' : '#5d5aa8';
   ctx.lineWidth = face.board ? 1.6 : 1;
   ctx.stroke();
 
-  ctx.strokeStyle = face.board ? '#64789f' : '#394b6b';
+  ctx.strokeStyle = face.board ? '#8a7fe0' : '#433f88';
   ctx.lineWidth = face.board ? 1.3 : 1;
   for (const inset of [-CELL_SIZE / 2, CELL_SIZE / 2]) {
     drawPath(ctx, [facePoint(face, inset, -HALF), facePoint(face, inset, HALF)], transform);
@@ -125,8 +125,8 @@ function drawWinningLine(ctx, line, transform) {
   ctx.lineCap = 'round';
   ctx.lineWidth = 4;
   ctx.shadowBlur = 14;
-  ctx.shadowColor = '#a2ffca';
-  ctx.strokeStyle = '#baffd6';
+  ctx.shadowColor = '#ffe08a';
+  ctx.strokeStyle = '#fff0b8';
   drawPath(ctx, [cellCenter(line[0]), cellCenter(line[2])], transform);
   ctx.stroke();
   ctx.restore();
@@ -253,31 +253,3 @@ export function createScene(canvas, grid, initialRound) {
 }
 
 /** @param {HTMLCanvasElement} canvas */
-export function drawStarfield(canvas) {
-  const ctx = context2d(canvas);
-  function resize() {
-    const { width, height } = canvas.getBoundingClientRect();
-    if (!width || !height) return;
-    resizeCanvas(canvas, ctx, width, height);
-    ctx.clearRect(0, 0, width, height);
-
-    // The seed keeps the original starfield stable when the window is resized.
-    let seed = 59021;
-    function next() {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return seed / 2 ** 32;
-    }
-    const stars = Math.min(570, Math.round(width * height / 2000));
-    for (let index = 0; index < stars; index++) {
-      const [x, y, brightness] = [next() * width, next() * height, next()];
-      const radius = 0.35 + brightness ** 5 * 1.1;
-      ctx.fillStyle = `rgba(201, 220, 255, ${0.12 + brightness * 0.48})`;
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, TAU);
-      ctx.fill();
-    }
-  }
-  new ResizeObserver(resize).observe(canvas);
-  window.addEventListener('resize', resize);
-  resize();
-}

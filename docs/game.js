@@ -2,11 +2,13 @@ import { createSound } from './audio.js';
 import { element } from './dom.js';
 import { BOARD_SIZE } from './geometry.js';
 import { chooseComputerMove, newRound, placeMark } from './rules.js';
-import { createScene, drawStarfield } from './scene.js';
+import { createScene } from './scene.js';
+import { createSky } from './sky.js';
 import { createTelegramConnection } from './telegram.js';
 
 const COMPUTER_DELAY = 450;
-const OUTCOME_LABEL = { X: 'You win!', O: 'Computer wins', draw: 'Draw!' };
+const OUTCOME_LABEL = { X: 'Вы победили!', O: 'Победил компьютер', draw: 'Ничья' };
+const MARK_LABEL = { X: 'крестик', O: 'нолик' };
 
 /** @typedef {import('./rules.js').Mark} Mark */
 /** @typedef {import('./rules.js').Round} Round */
@@ -23,7 +25,9 @@ let round = newRound();
 /** @type {ReturnType<typeof setTimeout> | undefined} */
 let computerTimer;
 const scene = createScene(element('#game-canvas', HTMLCanvasElement), grid, round);
-drawStarfield(element('#bg-canvas', HTMLCanvasElement));
+createSky(element('#bg-canvas', HTMLCanvasElement));
+const score = { X: element('#score-x', HTMLElement), O: element('#score-o', HTMLElement) };
+const wins = { X: 0, O: 0 };
 
 grid.style.setProperty('--board-size', `${BOARD_SIZE}px`);
 for (let row = 0; row < 3; row++) {
@@ -82,14 +86,14 @@ function render(options) {
     const row = Math.floor(index / 3) + 1;
     const column = index % 3 + 1;
     const mark = round.board[index];
-    square.setAttribute('aria-label', `Row ${row}, column ${column}: ${mark || 'empty'}`);
+    square.setAttribute('aria-label', `Ряд ${row}, столбец ${column}: ${mark ? MARK_LABEL[mark] : 'пусто'}`);
     square.setAttribute('aria-disabled', String(round.turn !== 'X' || Boolean(mark)));
   }
 
   const result = round.outcome?.result;
   status.dataset.result = result ?? '';
   status.textContent = result ? OUTCOME_LABEL[result]
-    : round.turn === 'X' ? 'Your turn' : 'Computer is thinking…';
+    : round.turn === 'X' ? 'Ваш ход' : 'Компьютер думает…';
   scene.show(round, options);
 }
 
@@ -98,13 +102,15 @@ async function reportOutcome(finished) {
   if (!finished.outcome) return;
   const { result } = finished.outcome;
   if (result === 'draw') return;
-  if (result === 'X') detail.textContent = 'Demo code: DEMO-WIN';
+  wins[result] += 1;
+  score[result].textContent = String(wins[result]);
+  if (result === 'X') detail.textContent = 'Демо-код: DEMO-WIN';
   if (!telegram?.connected) return;
 
   const delivered = await telegram.send(result === 'X' ? 'win' : 'loss');
   if (round !== finished) return;
-  detail.textContent = delivered ? 'Result sent to Telegram.'
-    : result === 'X' ? 'Demo code: DEMO-WIN · Telegram delivery failed.' : 'Telegram delivery failed.';
+  detail.textContent = delivered ? 'Результат отправлен в Telegram.'
+    : result === 'X' ? 'Демо-код: DEMO-WIN · не удалось отправить в Telegram.' : 'Не удалось отправить в Telegram.';
 }
 
 /**
@@ -120,7 +126,7 @@ function move(index, mark) {
   round = next;
   render();
   if (mark === 'O') {
-    status.textContent = `Computer played row ${Math.floor(index / 3) + 1}, column ${index % 3 + 1}. ${status.textContent}`;
+    status.textContent = `Компьютер: ряд ${Math.floor(index / 3) + 1}, столбец ${index % 3 + 1}. ${status.textContent}`;
   }
   if (round.outcome) void reportOutcome(round);
   return true;
